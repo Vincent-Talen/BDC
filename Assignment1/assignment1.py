@@ -10,22 +10,50 @@ Usage:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.0"
+__version__ = "0.1"
 
 # IMPORTS
-import argparse as ap
+import argparse
 
 
 # FUNCTIONS
+def parse_args():
+    """Parses the arguments given to the script.
+
+    Returns:
+        args: The parsed arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description="Script for Assignment 1 of the Big Data Computing course"
+    )
+    parser.add_argument(
+        "-n",
+        action="store",
+        dest="n",
+        type=int,
+        required=True,
+        help="Amount of cores to use."
+    )
+    parser.add_argument(
+        "-o",
+        action="store",
+        dest="csvfile",
+        type=argparse.FileType("w", encoding="UTF-8"),
+        required=False,
+        help="CSV file output should be saved to. Default is to write output to STDOUT."
+    )
+    parser.add_argument(
+        "fastq_files",
+        action="store",
+        type=argparse.FileType("r"),
+        nargs="+",
+        help="At least 1 Illumina FastQ Format file to process."
+    )
+    return parser.parse_args()
+
+
 def main():
-    argparser = ap.ArgumentParser(description="Script voor Opdracht 1 van Big Data Computing")
-    argparser.add_argument("-n", action="store",
-                           dest="n", required=True, type=int,
-                           help="Aantal cores om te gebruiken.")
-    argparser.add_argument("-o", action="store", dest="csvfile", type=ap.FileType('w', encoding='UTF-8'),
-                           required=False, help="CSV file om de output in op te slaan. Default is output naar terminal STDOUT")
-    argparser.add_argument("fastq_files", action="store", type=ap.FileType('r'), nargs='+', help="Minstens 1 Illumina Fastq Format file om te verwerken")
-    args = argparser.parse_args()
+    args = parse_args()
 
 
 if __name__ == "__main__":
