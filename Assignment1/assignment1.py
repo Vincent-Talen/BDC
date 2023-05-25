@@ -113,6 +113,7 @@ def get_mean_phred_scores(phred_lines_list):
 
 
 def main():
+    """Main function of the script."""
     # Parse arguments
     args = parse_args()
 
