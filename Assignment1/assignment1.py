@@ -5,7 +5,10 @@
 To decrease the runtime, the script does this parallelized using multiprocessing.Pool.
 
 Usage:
-    $ python3 assignment1.py -n <cpu_count> [-o <output csv file>] fastq_file1.fastq [fastq_file2.fastq ... fastq_fileN.fastq]
+    $ python3 assignment1.py
+        -n <cpu_count>
+        [-o <output csv file>]
+        fastq_file1.fastq [fastq_file2.fastq ... fastq_fileN.fastq]
 """
 
 # METADATA
@@ -14,10 +17,14 @@ __version__ = "0.1"
 
 # IMPORTS
 import argparse
-import multiprocessing
-import numpy as np
+import multiprocessing as mp
 
 from pathlib import Path
+
+import numpy as np
+
+# GLOBALS
+LAST_BATCH_SIZE: int
 
 
 # FUNCTIONS
@@ -91,6 +98,8 @@ def batch_generator(phred_lines, batch_size=5_000):
             yield batch
             batch = []
     if batch:
+        global LAST_BATCH_SIZE
+        LAST_BATCH_SIZE = len(batch)
         yield batch
 
 
@@ -117,25 +126,32 @@ def main():
     # Parse arguments
     args = parse_args()
 
-    multiple_files = len(args.fastq_files) > 1
+    # Define batch size
+    batch_size = 5_000
 
     for file_path in args.fastq_files:
         # Generators
         phred_lines = phred_lines_generator(file_path)
-        batches = batch_generator(phred_lines)
+        batches = batch_generator(phred_lines, batch_size)
 
-        # Initialize and create pool
-        with multiprocessing.Pool(processes=args.n) as pool:
+        # Initialize and create multiprocessing pool
+        with mp.Pool(processes=args.n) as pool:
             results = pool.map(get_mean_phred_scores, batches)
 
-        # Use results
-        file_pos_means = np.array(results).mean(axis=0)
+        # Convert pool results to numpy array
+        batch_means = np.array(results)
+        # Calculate weights for batches
+        weights = np.full(batch_means.shape[0], batch_size)
+        weights[-1] = LAST_BATCH_SIZE
+        # Calculate weighted average
+        file_pos_means = np.average(batch_means, axis=0, weights=weights)
+
         if output_path := args.csvfile:
-            if multiple_files:
+            if len(args.fastq_files) > 1:
                 output_path = output_path.parent.joinpath(
                     f"{file_path.stem}_{output_path.name}"
                 )
-            with open(output_path, "w") as csvfile:
+            with open(output_path, "w", encoding="UTF-8") as csvfile:
                 for i, pos in enumerate(file_pos_means):
                     csvfile.write(f"{i},{pos}\n")
         else:
