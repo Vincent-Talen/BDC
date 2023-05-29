@@ -25,8 +25,8 @@ Description of the course.
 BDC
 ├── Assignment1
 │   ├── README.md
-│   ├── example_output.csv
-│   └── assignment1.py
+│   ├── assignment1.py
+│   └── example_output.csv
 ├── .gitignore
 ├── LICENSE
 └── README.md
