@@ -27,6 +27,10 @@ BDC
 │   ├── README.md
 │   ├── assignment1.py
 │   └── example_output.csv
+├── Assignment2
+│   ├── README.md
+│   ├── assignment2.py
+│   └── example_output.csv
 ├── .gitignore
 ├── LICENSE
 └── README.md
