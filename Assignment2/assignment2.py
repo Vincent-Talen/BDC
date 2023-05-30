@@ -6,8 +6,19 @@ To decrease the runtime, the load is split between multiple computers using
 the multiprocessing Process and Queue classes.
 
 Starting a server:
+    $ python assignment2.py
+        -s
+        --host localhost
+        --port 25715
+        --chunks 4
+        example_output.csv
 
 Starting a client:
+    $ python assignment2.py
+        -c
+        --host localhost
+        --port 25715
+        -n 4
 """
 
 # METADATA
@@ -43,6 +54,22 @@ def parse_args():
         description="Script for Assignment 2 of the Big Data Computing course."
     )
 
+    # Add socket options
+    parser.add_argument(
+        "--host",
+        action="store",
+        type=str,
+        required=True,
+        help="The hostname where the Server is listening"
+    )
+    parser.add_argument(
+        "--port",
+        action="store",
+        type=int,
+        required=True,
+        help="The port on which the Server is listening"
+    )
+
     # Create the mutually exclusive group for the mode
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
@@ -62,12 +89,14 @@ def parse_args():
         "--chunks",
         action="store",
         type=int,
-        required=True
+        required=False,
+        default=20,
+        help="Amount of chunks to split the data into."
     )
     server_args.add_argument(
         "-o",
         action="store",
-        dest="csvfile",
+        dest="output_file",
         type=Path,
         required=False,
         help="CSV file output should be saved to. Default is to write output to STDOUT."
@@ -88,19 +117,8 @@ def parse_args():
         dest="n",
         type=int,
         required=False,
+        default=4,
         help="Amount of cores to use per host."
-    )
-    client_args.add_argument(
-        "--host",
-        action="store",
-        type=str,
-        help="The hostname where the Server is listening"
-    )
-    client_args.add_argument(
-        "--port",
-        action="store",
-        type=int,
-        help="The port on which the Server is listening"
     )
     return parser.parse_args()
 
