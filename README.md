@@ -16,7 +16,17 @@ Description of the course.
 
 ---
 ## About the course assignments
-???
+### Assignment1 - Processing FastQ files using multiprocessing.Pool
+Getting familiar with multiprocessing and other tools used, 
+by creating a script that calculates the average PHRED scores per position in FastQ files.
+
+Tools used: `argparse`, `multiprocessing.Pool`, `pathlib.Path`, `numpy`
+
+### Assignment2 - Processing the FastQ files on multiple computers
+This assignment is a continuation of assignment1 since it has the same input and output, 
+but computing will now be done on multiple computers using `multiprocessing`s `Process` and `Queue` classes.
+
+Tools used: `argparse`, `multiprocessing.Process`, `multiprocessing.Queue`, `queue.Queue`, `pathlib.Path`
 
 
 ---

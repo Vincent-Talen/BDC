@@ -15,13 +15,19 @@ The testing of the script will be done on the Hanze Bio-Informatics network insi
 The tool will start both a server, and one or more clients that connect to the server through a socket.
 
 To start the server the following command is used:
-> python3 assignment2.py -s --host localhost --port 25717 --chunks 100 /commons/Themas/Thema12/HPC/rnaseq.fastq
+```bash
+python3 assignment2.py -s --host localhost --port 25717 --chunks 100 /commons/Themas/Thema12/HPC/rnaseq.fastq
+```
 
 Clients are then started using this command:
-> python3 assignment2.py -c --host localhost --port 25717 -n 4
+```bash
+python3 assignment2.py -c --host localhost --port 25717 -n 4
+```
 
 Another requirement to pass the assignment is that a minimum `pylint` score of 8.0/10.0 is required, this will be checked with the following command:
-> pylint --disable C0301 assignment2.py
+```bash
+pylint --disable C0301,E1101 assignment2.py
+```
 
 
 ---
@@ -45,10 +51,14 @@ The first thing to do is activate the Conda environment, the one primarily used 
 This environment is located in the `/commons/conda` directory under the name `dsls`.
 
 If you already have a conda or mamba installation just use the following command:
-> conda activate /commons/conda/dsls
+```bash
+conda activate /commons/conda/dsls
+```
 
 If you do not have a conda or mamba installation, you can use the following command to activate the environment through a shell script:
-> source /commons/conda/conda_load.sh
+```bash
+source /commons/conda/conda_load.sh
+```
 
 Then, set the `Assignment2` directory as your working directory.
 It is assumed you yourself have a FastQ file to use, but one is also available on the Hanze Bio-Informatics network; `/commons/Themas/Thema12/HPC/rnaseq.fastq`.
@@ -60,17 +70,25 @@ Make sure to start the server before the clients and that the host and port are 
 since this determine the socket the server and clients connect through. 
 
 Example command for starting the server:
-> python3 assignment2.py -s --host localhost --port 25717 --chunks 100 /commons/Themas/Thema12/HPC/rnaseq.fastq
+```bash
+python3 assignment2.py -s --host localhost --port 25717 --chunks 100 /commons/Themas/Thema12/HPC/rnaseq.fastq
+```
 
 Example command for starting the clients:
-> python3 assignment2.py -c --host localhost --port 25717 -n 4
+```bash
+python3 assignment2.py -c --host localhost --port 25717 -n 4
+```
 
 To see all available options, use the `-h` option:
-> python3 assignment2.py -h
+```bash
+python3 assignment2.py -h
+```
 
 ### Output
 By default, all output is printed to the command line of the server, but it is also possible to save the output to a file by using the `-o` option as can be seen below:
-> python3 assignment2.py -s --host localhost --port 25717 --chunks 100 -o output.csv /commons/Themas/Thema12/HPC/rnaseq.fastq
+```bash
+python3 assignment2.py -s --host localhost --port 25717 --chunks 100 -o output.csv /commons/Themas/Thema12/HPC/rnaseq.fastq
+```
 
 If multiple input files are specified their output to the terminal is split by the file names. 
 When the `-o` option is used with multiple input files, the output file is used as a suffix in combination with the input file names.
