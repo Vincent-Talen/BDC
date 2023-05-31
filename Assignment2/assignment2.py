@@ -23,18 +23,16 @@ Starting a client:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.1"
+__version__ = "0.3"
 
 # IMPORTS
 import argparse
-import multiprocessing
+import multiprocessing as mp
 import queue
 import time
+
 from multiprocessing.managers import BaseManager
-
 from pathlib import Path
-
-import numpy as np
 
 # GLOBALS
 POISON_PILL = "NAWWSTAHPIT"
@@ -60,14 +58,14 @@ def parse_args():
         action="store",
         type=str,
         required=True,
-        help="The hostname where the Server is listening"
+        help="The hostname where the Server is listening",
     )
     parser.add_argument(
         "--port",
         action="store",
         type=int,
         required=True,
-        help="The port on which the Server is listening"
+        help="The port on which the Server is listening",
     )
 
     # Create the mutually exclusive group for the mode
@@ -75,12 +73,12 @@ def parse_args():
     mode.add_argument(
         "-s",
         action="store_true",
-        help="Run the program in Server mode; see extra options needed below"
+        help="Run the program in Server mode; see extra options needed below",
     )
     mode.add_argument(
         "-c",
         action="store_true",
-        help="Run the program in Client mode; see extra options needed below"
+        help="Run the program in Client mode; see extra options needed below",
     )
 
     # Create group with server mode arguments
@@ -91,7 +89,7 @@ def parse_args():
         type=int,
         required=False,
         default=20,
-        help="Amount of chunks to split the data into."
+        help="Amount of chunks to split the data into.",
     )
     server_args.add_argument(
         "-o",
@@ -99,14 +97,14 @@ def parse_args():
         dest="output_file",
         type=Path,
         required=False,
-        help="CSV file output should be saved to. Default is to write output to STDOUT."
+        help="File output should be saved to. Default is to write output to STDOUT.",
     )
     server_args.add_argument(
         "fastq_files",
         action="store",
         type=Path,
         nargs="+",
-        help="At least 1 Illumina FastQ Format file to process."
+        help="At least 1 Illumina FastQ Format file to process.",
     )
 
     # Create group with client mode arguments
@@ -114,30 +112,55 @@ def parse_args():
     client_args.add_argument(
         "-n",
         action="store",
-        dest="n",
+        dest="core_count",
         type=int,
         required=False,
         default=4,
-        help="Amount of cores to use per host."
+        help="Amount of cores to use per client.",
     )
     return parser.parse_args()
 
 
 def non_existent(dingus):
-    print("This function does not exist! But this is the Path:", dingus)
+    """Function that does not exist."""
+    string = f"This function does not exist! But this is the Path: {dingus}"
+    print(string)
+    return string
 
 
 # CLASSES
-class Server(multiprocessing.Process):
+class Server(mp.Process):
+    """Splits the data into chunks and starts socket client can connect to for the jobs.
+
+    Attributes:
+        data:
+            The data to be processed.
+        target_fun:
+            The function to be executed on the data.
+        host (str):
+            The hostname the Server will open the socket at.
+        port (str):
+            The port the Server will open the socket at.
+        outfile (Path | None):
+            The file output should be saved to.
+    """
     def __init__(
-        self,
-        *,
-        data,
-        target_fun,
-        host: str,
-        port: str,
-        outfile: Path | None = None
+        self, *, data, target_fun, host: str, port: str, outfile: Path | None = None
     ):
+        """Initializes the Server object.
+
+        Args:
+            data:
+                The data to be processed.
+            target_fun:
+                The function to be executed on the data.
+            host (str):
+                The hostname the Server will open the socket at.
+            port (str):
+                The port the Server will open the socket at.
+            outfile (Path | None):
+                The file output should be saved to.
+        """
         super().__init__()
         self.data = data
         self.target_fun = target_fun
@@ -146,69 +169,79 @@ class Server(multiprocessing.Process):
         self.outfile: Path | None = outfile
 
     def run(self):
-        # Start a shared manager server and access its queues
-        manager = self.__create_manager()
-        shared_job_queue = manager.get_job_queue()
-        shared_result_queue = manager.get_result_queue()
+        """Starts the server process, creates manager and fills the job queue with data.
 
+        This method is called when the process is started with the start() method,
+        there is thus no need to call this method yourself directly.
+
+        It will keep the server and manager running until all jobs have been returned.
+        """
         # Check if there was even data supplied, otherwise just stop the server
         if not self.data:
             print("Server has nothing to do!")
             return
 
-        # Put the data in the job queue
-        print("Sending data!")
-        for chunk in self.data:
-            shared_job_queue.put(
-                {"function": self.target_fun, "args": (chunk)}
-            )
-        time.sleep(2)
+        # Start a shared manager server and access its queues
+        with self.__create_manager() as manager:
+            shared_job_queue = manager.get_job_queue()
+            shared_result_queue = manager.get_result_queue()
 
-        # Get the results from the result queue
-        results = self.__wait_and_get_results(shared_result_queue)
+            # Put the data in the job queue
+            print("Sending data!")
+            # TODO: Fix data
+            for chunk in self.data:
+                shared_job_queue.put({"function": self.target_fun, "args": (chunk)})
+            time.sleep(2)
 
-        # Tell the client process no more data will be forthcoming
-        print("Time to kill some peons!")
-        shared_job_queue.put(POISON_PILL)
-        # Sleep 5 seconds to give connected clients the chance to properly shut down
-        time.sleep(5)
-        print("Server finished")
-        manager.shutdown()
+            # Get the results from the result queue
+            print("Now waiting for results!")
+            results = self.__wait_and_get_results(shared_result_queue)
+
+            # Tell the client process no more data will be forthcoming
+            print("Time to kill some peons!")
+            shared_job_queue.put(POISON_PILL)
+            # Sleep 5 seconds to give connected clients the chance to properly shut down
+            time.sleep(5)
+            print("Server finished")
         print(results)
 
     def __create_manager(self):
+        """Creates and starts manager with the job and result queues on the socket."""
         # Initialize the job and result queues
         job_queue = queue.Queue()
         result_queue = queue.Queue()
 
         # Create a custom manager class and register the queues
-        class ServerSideQueueManager(BaseManager):
-            pass
+        class ServerSideManager(BaseManager):
+            """Custom manager class for hosting the job and result queues."""
 
-        ServerSideQueueManager.register(
-            "get_job_queue", callable=lambda: job_queue
-        )
-        ServerSideQueueManager.register(
-            "get_result_queue", callable=lambda: result_queue
-        )
+        ServerSideManager.register("get_job_queue", callable=lambda: job_queue)
+        ServerSideManager.register("get_result_queue", callable=lambda: result_queue)
 
         # Create instance of the custom manager class and start it
-        manager = ServerSideQueueManager(
-            address=(self.host, self.port), authkey=AUTHKEY
-        )
+        manager = ServerSideManager(address=(self.host, self.port), authkey=AUTHKEY)
         manager.start()
+
         print(f"Server started at {self.host}:{self.port}")
         return manager
 
     def __wait_and_get_results(self, shared_result_queue: queue.Queue):
-        results = list()
+        """Waits for results to be put in the result queue and returns them.
+
+        It keeps checking the result queue until all results have been returned.
+
+        Args:
+            shared_result_queue (queue.Queue):
+                The queue to get the results from.
+        """
+        results = []
         while True:
             try:
                 # Checks if there is data in the results queue, throws exception if not
                 result = shared_result_queue.get_nowait()
                 # If no exception is thrown there is data in the queue
                 results.append(result)
-                print("Got result!")
+                print("Got a result!")
 
                 # When all data has been processed, stop the loop waiting for results
                 if len(results) == len(self.data):
@@ -220,55 +253,102 @@ class Server(multiprocessing.Process):
         return results
 
 
-class Peon(multiprocessing.Process):
+class Peon(mp.Process):
+    """Gets jobs from the job queue and executes them.
+
+    Attributes:
+        job_queue (queue.Queue):
+            The queue to get the jobs from.
+        result_queue (queue.Queue):
+            The queue to put the results in.
+    """
     def __init__(self, job_queue: queue.Queue, result_queue: queue.Queue):
+        """Initializes the Peon object.
+
+        Args:
+            job_queue (queue.Queue):
+                The queue to get the jobs from.
+            result_queue (queue.Queue):
+                The queue to put the results in.
+        """
         super().__init__()
         self.job_queue = job_queue
         self.result_queue = result_queue
 
     def run(self):
+        """Starts the peon process, gets jobs from the job queue and executes them.
+
+        This method is called when the process is started with the start() method,
+        there is thus no need to call this method yourself directly.
+        """
         while True:
             try:
+                # Try to get a job from the job queue
                 job = self.job_queue.get_nowait()
+
+                # If the job is the poison pill use return statement, killing this peon
                 if job == POISON_PILL:
+                    # Place the poison pill back into the queue so other peons also die
                     self.job_queue.put(POISON_PILL)
                     print("Aaaaaaargh", self.name)
                     return
-                else:
-                    try:
-                        target_fun = job["function"]
-                        arguments = job["args"]
-                        print(f"Peon {self.name} Workwork on {arguments}!")
-                        result = target_fun(arguments)
-                        self.result_queue.put(
-                            {"job": job, "result": result}
-                        )
-                    except NameError:
-                        print("Can't find yer function Bob!")
-                        self.result_queue.put(
-                            {"job": job, "result": ERROR}
-                        )
 
+                # Job received, try executing it
+                try:
+                    target_fun = job["function"]
+                    arguments = job["args"]
+                    print(f"Peon {self.name} Workwork on {arguments}!")
+                    result = target_fun(arguments)
+                    self.result_queue.put({"job": job, "result": result})
+                except NameError:
+                    print("Target function not found!")
+                    self.result_queue.put({"job": job, "result": ERROR})
             except queue.Empty:
+                # No jobs found in job queue
                 print("sleepytime for", self.name)
                 time.sleep(1)
 
 
-class Client(multiprocessing.Process):
+class Client(mp.Process):
+    """Creates a client process that connects to the manager server and starts workers.
+
+    Attributes:
+        host (str):
+            The host address of the manager server.
+        port (str):
+            The port of the manager server.
+        core_count (int):
+            The number of workers to start.
+    """
     def __init__(
         self,
         *,
         host: str,
         port: str,
-        n: int,
+        core_count: int,
     ):
+        """Initializes the Client object.
+
+        Args:
+            host (str):
+                The host address of the manager server.
+            port (str):
+                The port of the manager server.
+            core_count (int):
+                The number of workers to start.
+        """
         super().__init__()
         self.host: str = host
         self.port: str = port
-        self.n: int = n
+        self.core_count: int = core_count
 
     def run(self):
-        # Start a shared manager server and access its queues
+        """Starts the client process, connects to the manager server and starts workers.
+
+        This method is called when the process is started with the start() method,
+        there is thus no need to call this method yourself directly.
+        """
+        # Connect to the manager server and access its queues
         manager = self.__create_manager()
         job_queue = manager.get_job_queue()
         result_queue = manager.get_result_queue()
@@ -277,34 +357,38 @@ class Client(multiprocessing.Process):
         self.__run_workers(job_queue, result_queue)
 
     def __create_manager(self):
+        """Creates and connects a client manager to the manager server's socket."""
         # Create a custom manager class and register the queues
-        class ClientSideQueueManager(BaseManager):
-            pass
+        class ClientSideManager(BaseManager):
+            """Custom manager class that connects to the manager server."""
 
-        ClientSideQueueManager.register("get_job_queue")
-        ClientSideQueueManager.register("get_result_queue")
+        ClientSideManager.register("get_job_queue")
+        ClientSideManager.register("get_result_queue")
 
-        # Create instance of the custom manager class and connect to it
-        manager = ClientSideQueueManager(
-            address=(self.host, self.port), authkey=AUTHKEY
-        )
+        # Create instance of the custom manager and connect to the server with it
+        manager = ClientSideManager(address=(self.host, self.port), authkey=AUTHKEY)
         manager.connect()
 
         print(f"Client connected to {self.host}:{self.port}")
         return manager
 
     def __run_workers(self, job_queue: queue.Queue, result_queue: queue.Queue):
-        processes = list()
+        """Starts worker peons and waits for them to finish.
+
+        Args:
+            job_queue (queue.Queue):
+                The queue to get the jobs from.
+            result_queue (queue.Queue):
+                The queue to put the results in.
+        """
+        processes = []
 
         # Start the workers
-        for _ in range(self.n):
-            worker = Peon(
-                job_queue=job_queue,
-                result_queue=result_queue
-            )
+        for _ in range(self.core_count):
+            worker = Peon(job_queue=job_queue, result_queue=result_queue)
             processes.append(worker)
             worker.start()
-        print(f"Started {self.n} workers!")
+        print(f"Started {self.core_count} worker peons!")
 
         # Wait for the workers to finish
         for process in processes:
@@ -320,23 +404,19 @@ def main():
     # Checks if script is started as server or client mode
     if args.s:
         # Server mode
-        data_idk = args.fastq_files[0]
+        data_idk = ["sjon"]
         server = Server(
             data=data_idk,
             target_fun=non_existent,
             host=args.host,
             port=args.port,
-            outfile=args.output_file
+            outfile=args.output_file,
         )
         server.start()
         time.sleep(1)
     elif args.c:
         # Client mode
-        client = Client(
-            host=args.host,
-            port=args.port,
-            n=args.n
-        )
+        client = Client(host=args.host, port=args.port, core_count=args.core_count)
         client.start()
         client.join()
 
