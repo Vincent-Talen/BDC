@@ -64,6 +64,13 @@ def parse_args():
 
 
 # CLASSES
+class FastQChunk:
+    def __init__(self, filepath: Path, start_offset: int, stop_offset: int):
+        self.filepath: Path = filepath
+        self.start_offset: int = start_offset
+        self.stop_offset: int = stop_offset
+
+
 class FastQFileHandler:
     def __init__(self, fastq_files: list[Path], chunk_count: int):
         self.file_paths: list[Path] = fastq_files
@@ -76,8 +83,7 @@ class FastQFileHandler:
                 print(f"ERROR: File '{file_path}' does not exist! Exiting...")
                 sys.exit(1)
 
-    def create_chunk_dicts_for_files(self):
-        dicts_list = []
+    def chunk_generator(self):
         for filepath in self.file_paths:
             # Get the byte size of the current file
             file_byte_size = filepath.stat().st_size
@@ -85,17 +91,11 @@ class FastQFileHandler:
             # Calculate chunk sizes and remainder of bytes
             quotient, remainder = divmod(file_byte_size, self.chunk_count)
 
-            # Calculate the start and stop byte offsets for each chunk
-            chunk_offsets = []
+            # Calculate the start and stop byte offsets and yield FastQChunk objects
             for i in range(self.chunk_count):
                 start = i * quotient + min(i, remainder)
                 stop = (i + 1) * quotient + min(i + 1, remainder)
-                chunk_offsets.append((start, stop))
-
-            # Create a dictionary with the chunk information and the current filepath
-            cur_file_dict = {"filepath": filepath, "chunk_offsets": chunk_offsets}
-            dicts_list.append(cur_file_dict)
-        return dicts_list
+                yield FastQChunk(filepath, start, stop)
 
 
 def main():
@@ -107,8 +107,10 @@ def main():
     file_handler = FastQFileHandler(
         fastq_files=args.fastq_files, chunk_count=args.cpu_count
     )
-    file_dicts_list = file_handler.create_chunk_dicts_for_files()
-    print(file_dicts_list)
+    chunks: list[FastQChunk] = list(file_handler.chunk_generator())
+
+    for chunk in chunks:
+        print(chunk)
 
 
 if __name__ == "__main__":
