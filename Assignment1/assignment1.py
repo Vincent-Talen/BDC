@@ -125,13 +125,17 @@ class FastQFileHandler:
         self.file_paths: list[Path] = fastq_files
         self.chunk_count: int = chunk_count
         self.min_chunk_size: int = min_chunk_size
-        self._check_if_files_exist()
+        self._check_if_input_files_exist()
 
-    def _check_if_files_exist(self):
+    def _check_if_input_files_exist(self):
+        file_error_strings = []
         for file_path in self.file_paths:
             if not file_path.exists():
-                print(f"ERROR: File '{file_path}' does not exist! Exiting...")
-                sys.exit(1)
+                file_error_strings.append(f"ERROR: File '{file_path}' does not exist!")
+        if file_error_strings:
+            print("\n".join(file_error_strings))
+            print("Exiting...")
+            sys.exit(1)
 
     def chunk_generator(self):
         for filepath in self.file_paths:
