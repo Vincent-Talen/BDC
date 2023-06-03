@@ -91,9 +91,12 @@ class FastQChunk:
 
 
 class FastQFileHandler:
-    def __init__(self, fastq_files: list[Path], chunk_count: int):
+    def __init__(
+        self, fastq_files: list[Path], chunk_count: int, min_chunk_size: int = 1024
+    ):
         self.file_paths: list[Path] = fastq_files
         self.chunk_count: int = chunk_count
+        self.min_chunk_size: int = min_chunk_size
         self._check_if_files_exist()
 
     def _check_if_files_exist(self):
@@ -110,6 +113,11 @@ class FastQFileHandler:
             # Calculate chunk sizes and remainder of bytes
             quotient, remainder = divmod(file_byte_size, self.chunk_count)
 
+            # Enforce minimum chunk size
+            if quotient < self.min_chunk_size:
+                new_chunk_count = file_byte_size // self.min_chunk_size
+                quotient, remainder = divmod(file_byte_size, new_chunk_count)
+
             # Calculate the start and stop byte offsets and yield FastQChunk objects
             for i in range(self.chunk_count):
                 start = i * quotient + min(i, remainder)
@@ -124,7 +132,7 @@ def main():
 
     # Create file handler and use it to generate chunks
     file_handler = FastQFileHandler(
-        fastq_files=args.fastq_files, chunk_count=args.cpu_count
+        fastq_files=args.fastq_files, chunk_count=args.cpu_count, min_chunk_size=1024
     )
     chunks: list[FastQChunk] = list(file_handler.chunk_generator())
 
