@@ -21,6 +21,7 @@ import multiprocessing as mp
 import sys
 
 from pathlib import Path
+from typing import BinaryIO
 
 import numpy as np
 
@@ -78,16 +79,43 @@ class FastQChunk:
             # Go to the chunk start offset in the file
             file.seek(self.start_offset)
 
+            # Make sure the cursor is positioned at the start of an entry
+            self._ensure_correct_positioning(file)
+
             # Keep reading entries until the chunk stop offset is reached
             while file.tell() < self.stop_offset:
-                line = file.readline().strip()
+                # Skip the header, sequence and separator lines
+                file.readline()
+                file.readline()
+                file.readline()
+                # Yield the quality line
+                yield file.readline().strip()
 
-                if line.startswith(b"@"):
-                    # Skip Sequence and Separator lines
-                    file.readline()
-                    file.readline()
-                    # Yield the quality line
-                    yield file.readline().strip()
+    def _ensure_correct_positioning(self, file_obj: BinaryIO):
+        correctly_positioned: bool = False
+        while not correctly_positioned and file_obj.tell() < self.stop_offset:
+            # Remember the byte position before the line is read
+            byte_position = file_obj.tell()
+
+            # Read the next line, it should be a header line if it starts with an @
+            first_line = file_obj.readline()
+            if first_line.startswith(b"@"):
+                # By chance the quality line can actually also start with an @
+                # To be sure which line we're at we'll check the next line after it too
+                byte_position_before_second_line = file_obj.tell()
+                second_line = file_obj.readline()
+                if second_line.startswith(b"@"):
+                    # If the second line starts with @, the first was the quality line
+                    # So the second is the header, which we want to position in front of
+                    byte_position = byte_position_before_second_line
+                    correctly_positioned = True
+                else:
+                    # If the second line does not start with @, the first was the header
+                    # Do nothing since byte_position is already the correct position
+                    correctly_positioned = True
+
+        # Go back to the correct byte position in the file object
+        file_obj.seek(byte_position)
 
 
 class FastQFileHandler:
