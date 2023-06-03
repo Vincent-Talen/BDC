@@ -70,22 +70,24 @@ class FastQChunk:
         self.start_offset: int = start_offset
         self.stop_offset: int = stop_offset
 
-    def get_quality_lines(self):
-        quality_lines = []
+    def perform_stuff(self):
+        return list(self.quality_line_generator())
+
+    def quality_line_generator(self):
         with open(self.filepath, "rb") as file:
             # Go to the chunk start offset in the file
             file.seek(self.start_offset)
-            # Read lines until the chunk stop offset is reached
+
+            # Keep reading entries until the chunk stop offset is reached
             while file.tell() < self.stop_offset:
                 line = file.readline().strip()
+
                 if line.startswith(b"@"):
-                    # skip sequence line and strand line
+                    # Skip Sequence and Separator lines
                     file.readline()
                     file.readline()
-                    # quality line
-                    quality_line = file.readline().strip()
-                    quality_lines.append(quality_line)
-        return quality_lines
+                    # Yield the quality line
+                    yield file.readline().strip()
 
 
 class FastQFileHandler:
@@ -128,7 +130,7 @@ def main():
 
     # Initialize and create multiprocessing pool
     with mp.Pool(processes=args.cpu_count) as pool:
-        results = pool.map(FastQChunk.get_quality_lines, chunks)
+        results = pool.map(FastQChunk.perform_stuff, chunks)
 
     for result in results:
         print(len(result))
