@@ -71,8 +71,26 @@ class FastQChunk:
         self.start_offset: int = start_offset
         self.stop_offset: int = stop_offset
 
+        self.mean_array: np.ndarray = None
+        self.line_count: int = None
+
     def perform_stuff(self):
-        return list(self.quality_line_generator())
+        # Get the quality lines as ascii unsigned integers in numpy arrays
+        quality_array_list = [
+            np.frombuffer(line, dtype=np.uint8)
+            for line in self.quality_line_generator()
+        ]
+
+        # Create 2-D array with the lines' phred scores (ascii-33)
+        complete_array = np.array(quality_array_list) - 33
+
+        # Calculate the mean per chunk
+        self.mean_array = np.mean(complete_array, axis=0, dtype=np.float64)
+        # Get the amount of lines in the chunk
+        self.line_count = complete_array.shape[0]
+
+        # Return this chunk object back
+        return self
 
     def quality_line_generator(self):
         with open(self.filepath, "rb") as file:
@@ -170,7 +188,10 @@ def main():
 
     # Initialize and create multiprocessing pool
     with mp.Pool(processes=args.cpu_count) as pool:
-        results = pool.map(FastQChunk.perform_stuff, chunks)
+        chunk_obj_list = pool.map(FastQChunk.perform_stuff, chunks)
+
+    for chunk_obj in chunk_obj_list:
+        print(chunk_obj.mean_array)
 
     for result in results:
         print(len(result))
