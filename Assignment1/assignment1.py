@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument(
         "-o",
         action="store",
-        dest="csvfile",
+        dest="output_file",
         type=Path,
         required=False,
         help="CSV file output should be saved to. Default is to write output to STDOUT."
@@ -62,6 +62,18 @@ def parse_args():
         help="At least 1 Illumina FastQ Format file to process."
     )
     return parser.parse_args()
+
+
+def combine_numpy_arrays(array_list: list[np.ndarray]):
+    # Create array with the length of every line
+    row_lengths = np.array([len(item) for item in array_list])
+    # Create 2-D boolean array indicating if lines have a character at a position
+    bool_array = row_lengths[:, None] > np.arange(row_lengths.max())
+    # Create 2-D array containing zeros in the same shape as the boolean array
+    complete_array = np.zeros(bool_array.shape, dtype=int)
+    # Place the data into the 2-D array
+    complete_array[bool_array] = np.concatenate(array_list)
+    return complete_array
 
 
 # CLASSES
@@ -77,24 +89,18 @@ class FastQChunk:
     def perform_stuff(self):
         # Get the quality lines as ascii unsigned integers in numpy arrays
         quality_array_list = [
-            np.frombuffer(line, dtype=np.uint8)
+            np.frombuffer(line, dtype=np.uint8) - 33
             for line in self.quality_line_generator()
         ]
 
-        # Create array with the length of every line
-        row_lengths = np.array([len(item) for item in quality_array_list])
-        # Create 2-D boolean array indicating if lines have a character at a position
-        bool_array = row_lengths[:, None] > np.arange(row_lengths.max())
-        # Create 2-D array containing zeros in the same shape as the boolean array
-        complete_array = np.zeros(bool_array.shape, dtype=int)
-        # Place the lines' phred scores (ascii-33) into the 2-D array
-        complete_array[bool_array] = np.concatenate(quality_array_list) - 33
+        # Create a single array containing all the quality lines' phred scores
+        complete_phred_array = combine_numpy_arrays(quality_array_list)
 
         # Calculate the sum and count/weight of each column for the chunk
-        self.sum_array = np.sum(complete_array, axis=0)
-        self.position_count_array = np.count_nonzero(complete_array, axis=0)
+        self.sum_array = np.sum(complete_phred_array, axis=0)
+        self.position_count_array = np.count_nonzero(complete_phred_array, axis=0)
 
-        # Return this chunk object back
+        # Return the current chunk instance
         return self
 
     def quality_line_generator(self):
@@ -143,9 +149,14 @@ class FastQChunk:
 
 class FastQFileHandler:
     def __init__(
-        self, fastq_files: list[Path], chunk_count: int, min_chunk_size: int = 1024
+        self,
+        fastq_files: list[Path],
+        output_file: Path | None,
+        chunk_count: int = 4,
+        min_chunk_size: int = 1024
     ):
         self.file_paths: list[Path] = fastq_files
+        self.output_file: Path | None = output_file
         self.chunk_count: int = chunk_count
         self.min_chunk_size: int = min_chunk_size
         self._check_if_input_files_exist()
@@ -179,6 +190,51 @@ class FastQFileHandler:
                 stop = (i + 1) * quotient + min(i + 1, remainder)
                 yield FastQChunk(filepath, start, stop)
 
+    def process_results(self, processed_chunks: list[FastQChunk]):
+        # Create dictionary to put chunks in per file
+        chunks_per_file = {file_path: [] for file_path in self.file_paths}
+
+        # Put chunk result arrays in the dictionary
+        for chunk in processed_chunks:
+            chunk_results = [chunk.sum_array, chunk.position_count_array]
+            chunks_per_file[chunk.filepath].append(chunk_results)
+
+        # Calculate the total average phred score per position per file
+        for file, array_lists in chunks_per_file.items():
+            file_phred_sum_arrays = [item[0] for item in array_lists]
+            file_position_count_arrays = [item[1] for item in array_lists]
+
+            # Combine the sums and position counts of all the chunks of the file
+            file_total_phred_sum = np.sum(
+                combine_numpy_arrays(file_phred_sum_arrays), axis=0
+            )
+            file_total_position_counts = np.sum(
+                combine_numpy_arrays(file_position_count_arrays), axis=0
+            )
+
+            # Calculate the total average phred score per position for the file
+            file_phred_averages = np.divide(
+                file_total_phred_sum, file_total_position_counts, dtype=np.float64
+            )
+            # Finalize by saving or displaying the results
+            self.show_results_for_file(file, file_phred_averages)
+
+    def show_results_for_file(
+        self, input_file_path: Path, file_phred_averages: np.ndarray
+    ):
+        if output_path := self.output_file:
+            if len(self.file_paths) > 1:
+                output_path = self.output_file.parent.joinpath(
+                    f"{input_file_path.stem}_{self.output_file.name}"
+                )
+            with open(output_path, "w", encoding="UTF-8") as csvfile:
+                for i, pos in enumerate(file_phred_averages):
+                    csvfile.write(f"{i},{pos}\n")
+        else:
+            print(input_file_path)
+            for i, pos in enumerate(file_phred_averages):
+                print(f"{i},{pos}")
+
 
 def main():
     """Main function of the script."""
@@ -187,19 +243,19 @@ def main():
 
     # Create file handler and use it to generate chunks
     file_handler = FastQFileHandler(
-        fastq_files=args.fastq_files, chunk_count=args.cpu_count, min_chunk_size=1024
+        fastq_files=args.fastq_files,
+        output_file=args.output_file,
+        chunk_count=args.cpu_count,
+        min_chunk_size=1024
     )
-    chunks: list[FastQChunk] = list(file_handler.chunk_generator())
+    unprocessed_chunks = file_handler.chunk_generator()
 
     # Initialize and create multiprocessing pool
     with mp.Pool(processes=args.cpu_count) as pool:
-        chunk_obj_list = pool.map(FastQChunk.perform_stuff, chunks)
+        processed_chunks = pool.map(FastQChunk.perform_stuff, unprocessed_chunks)
 
-    for chunk_obj in chunk_obj_list:
-        print(chunk_obj.sum_array / chunk_obj.position_count_array)
-
-    for result in results:
-        print(len(result))
+    # Finalize by further processing the results
+    file_handler.process_results(processed_chunks)
 
 
 if __name__ == "__main__":
