@@ -71,8 +71,8 @@ class FastQChunk:
         self.start_offset: int = start_offset
         self.stop_offset: int = stop_offset
 
-        self.mean_array: np.ndarray = None
-        self.line_count: int = None
+        self.sum_array: np.ndarray = None
+        self.position_count_array: np.ndarray = None
 
     def perform_stuff(self):
         # Get the quality lines as ascii unsigned integers in numpy arrays
@@ -81,13 +81,18 @@ class FastQChunk:
             for line in self.quality_line_generator()
         ]
 
-        # Create 2-D array with the lines' phred scores (ascii-33)
-        complete_array = np.array(quality_array_list) - 33
+        # Create array with the length of every line
+        row_lengths = np.array([len(item) for item in quality_array_list])
+        # Create 2-D boolean array indicating if lines have a character at a position
+        bool_array = row_lengths[:, None] > np.arange(row_lengths.max())
+        # Create 2-D array containing zeros in the same shape as the boolean array
+        complete_array = np.zeros(bool_array.shape, dtype=int)
+        # Place the lines' phred scores (ascii-33) into the 2-D array
+        complete_array[bool_array] = np.concatenate(quality_array_list) - 33
 
-        # Calculate the mean per chunk
-        self.mean_array = np.mean(complete_array, axis=0, dtype=np.float64)
-        # Get the amount of lines in the chunk
-        self.line_count = complete_array.shape[0]
+        # Calculate the sum and count/weight of each column for the chunk
+        self.sum_array = np.sum(complete_array, axis=0)
+        self.position_count_array = np.count_nonzero(complete_array, axis=0)
 
         # Return this chunk object back
         return self
@@ -191,7 +196,7 @@ def main():
         chunk_obj_list = pool.map(FastQChunk.perform_stuff, chunks)
 
     for chunk_obj in chunk_obj_list:
-        print(chunk_obj.mean_array)
+        print(chunk_obj.sum_array / chunk_obj.position_count_array)
 
     for result in results:
         print(len(result))
