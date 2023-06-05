@@ -13,7 +13,7 @@ Usage:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "2.0"
+__version__ = "2.1"
 
 # IMPORTS
 import argparse
@@ -24,8 +24,6 @@ from pathlib import Path
 from typing import BinaryIO
 
 import numpy as np
-
-# GLOBALS
 
 
 # FUNCTIONS
@@ -64,15 +62,21 @@ def parse_args():
     return parser.parse_args()
 
 
-def combine_numpy_arrays(array_list: list[np.ndarray]):
+def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
     # Create array with the length of every line
     row_lengths = np.array([len(item) for item in array_list])
     # Create 2-D boolean array indicating if lines have a character at a position
     bool_array = row_lengths[:, None] > np.arange(row_lengths.max())
     # Create 2-D array containing zeros in the same shape as the boolean array
     complete_array = np.zeros(bool_array.shape, dtype=int)
-    # Place the data into the 2-D array
-    complete_array[bool_array] = np.concatenate(array_list)
+
+    # Fill the data normally or if phred is true perform ASCII-33 conversion
+    if phred:
+        # Place the lines' phred scores (ascii-33) into the 2-D array
+        complete_array[bool_array] = np.concatenate(array_list) - 33
+    else:
+        # Place the data into the 2-D array
+        complete_array[bool_array] = np.concatenate(array_list)
     return complete_array
 
 
@@ -89,12 +93,12 @@ class FastQChunk:
     def perform_stuff(self):
         # Get the quality lines as ascii unsigned integers in numpy arrays
         quality_array_list = [
-            np.frombuffer(line, dtype=np.uint8) - 33
+            np.frombuffer(line, dtype=np.uint8)
             for line in self.quality_line_generator()
         ]
 
         # Create a single array containing all the quality lines' phred scores
-        complete_phred_array = combine_numpy_arrays(quality_array_list)
+        complete_phred_array = combine_numpy_arrays(quality_array_list, phred=True)
 
         # Calculate the sum and count/weight of each column for the chunk
         self.sum_array = np.sum(complete_phred_array, axis=0)
