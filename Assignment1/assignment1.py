@@ -13,12 +13,13 @@ Usage:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "2.1"
+__version__ = "2.2"
 
 # IMPORTS
 import argparse
 import multiprocessing as mp
 import sys
+from operator import itemgetter
 
 from pathlib import Path
 from typing import BinaryIO
@@ -163,33 +164,80 @@ class FastQFileHandler:
         self.output_file: Path | None = output_file
         self.chunk_count: int = chunk_count
         self.min_chunk_size: int = min_chunk_size
-        self._check_if_input_files_exist()
+        self._check_if_input_files_exist_and_not_empty()
 
-    def _check_if_input_files_exist(self):
+    def _check_if_input_files_exist_and_not_empty(self):
         file_error_strings = []
         for file_path in self.file_paths:
             if not file_path.exists():
                 file_error_strings.append(f"ERROR: File '{file_path}' does not exist!")
+            if not file_path.stat().st_size > 0:
+                file_error_strings.append(f"ERROR: File '{file_path}' is empty!")
         if file_error_strings:
             print("\n".join(file_error_strings))
             print("Exiting...")
             sys.exit(1)
 
+    def _proportionally_divide_chunks_between_files(self) -> dict[Path, int]:
+        # Initialize a dictionary with each file having 1 initial chunk
+        file_chunks_dict = {file_path: 1 for file_path in self.file_paths}
+
+        # Get the byte size of each file and unallocated chunks after giving each file 1
+        file_sizes = [file_path.stat().st_size for file_path in self.file_paths]
+        unallocated_chunks = self.chunk_count - len(file_sizes)
+
+        # Calculate the quota at which size an extra core is given to a file
+        quota = sum(file_sizes) / (1 + unallocated_chunks)
+        # Calculate the fractional amount of times the quota fits in the file byte sizes
+        fractions = [file_size / quota for file_size in file_sizes]
+
+        # Give each file the amount of chunks that fully fit in the file size
+        for i, file_path in enumerate(file_chunks_dict):
+            allocated_chunks = int(fractions[i])
+            file_chunks_dict[file_path] += allocated_chunks
+            unallocated_chunks -= allocated_chunks
+            fractions[i] -= allocated_chunks
+
+        # If not all chunks are allocated, add to the files with the largest remainders
+        if unallocated_chunks > 0:
+            # Bind the file paths to their remaining fractions and apply descending sort
+            fraction_tuples = (
+                (file, frac) for file, frac in zip(self.file_paths, fractions)
+            )
+            sorted_fractions = sorted(fraction_tuples, key=itemgetter(1), reverse=True)
+            # Give `unallocated chunks` amount of files an extra core
+            for file_path, _ in sorted_fractions[:unallocated_chunks]:
+                file_chunks_dict[file_path] += 1
+
+        # Return the dictionary with the file paths and their allocated chunks
+        return file_chunks_dict
+
     def chunk_generator(self):
+        if len(self.file_paths) == 1:
+            # When only given one file it can use all the chunks
+            file_chunks_dict = {self.file_paths[0]: self.chunk_count}
+        elif len(self.file_paths) < self.chunk_count:
+            # If there are more chunks than files, divide chunks proportionally
+            file_chunks_dict = self._proportionally_divide_chunks_between_files()
+        else:
+            # Use 1 chunk per file if there are more, or as many files as chunks
+            file_chunks_dict = {file_path: 1 for file_path in self.file_paths}
+
         for filepath in self.file_paths:
-            # Get the byte size of the current file
+            # Get the byte size and allocated chunks for the current file
             file_byte_size = filepath.stat().st_size
+            allocated_chunks = file_chunks_dict[filepath]
 
             # Calculate chunk sizes and remainder of bytes
-            quotient, remainder = divmod(file_byte_size, self.chunk_count)
+            quotient, remainder = divmod(file_byte_size, allocated_chunks)
 
             # Enforce minimum chunk size
             if quotient < self.min_chunk_size:
-                new_chunk_count = file_byte_size // self.min_chunk_size
-                quotient, remainder = divmod(file_byte_size, new_chunk_count)
+                allocated_chunks = file_byte_size // self.min_chunk_size
+                quotient, remainder = divmod(file_byte_size, allocated_chunks)
 
             # Calculate the start and stop byte offsets and yield FastQChunk objects
-            for i in range(self.chunk_count):
+            for i in range(allocated_chunks):
                 start = i * quotient + min(i, remainder)
                 stop = (i + 1) * quotient + min(i + 1, remainder)
                 yield FastQChunk(filepath, start, stop)
