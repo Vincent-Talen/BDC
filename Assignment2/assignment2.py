@@ -11,7 +11,7 @@ Starting a server:
         --host localhost
         --port 25715
         --chunks 4
-        example_output.csv
+        -o output.csv
 
 Starting a client:
     $ python assignment2.py
@@ -23,16 +23,21 @@ Starting a client:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.3"
+__version__ = "1.2"
 
 # IMPORTS
 import argparse
 import multiprocessing as mp
 import queue
+import sys
 import time
 
 from multiprocessing.managers import BaseManager
 from pathlib import Path
+
+assignment1_dir_path = str(Path(__file__).parent.parent.joinpath("Assignment1"))
+sys.path.append(assignment1_dir_path)
+from assignment1 import FastQChunk, FastQFileHandler
 
 # GLOBALS
 POISON_PILL = "NAWWSTAHPIT"
@@ -103,7 +108,7 @@ def parse_args():
         "fastq_files",
         action="store",
         type=Path,
-        nargs="+",
+        nargs="*",
         help="At least 1 Illumina FastQ Format file to process.",
     )
 
@@ -121,20 +126,13 @@ def parse_args():
     return parser.parse_args()
 
 
-def non_existent(dingus):
-    """Function that does not exist."""
-    string = f"This function does not exist! But this is the Path: {dingus}"
-    print(string)
-    return string
-
-
 # CLASSES
 class Server(mp.Process):
     """Splits the data into chunks and starts socket client can connect to for the jobs.
 
     Attributes:
-        data:
-            The data to be processed.
+        file_handler (FastQFileHandler):
+            A file handler instance with the fastq data to be processed.
         target_fun:
             The function to be executed on the data.
         host (str):
@@ -145,13 +143,19 @@ class Server(mp.Process):
             The file output should be saved to.
     """
     def __init__(
-        self, *, data, target_fun, host: str, port: str, outfile: Path | None = None
+        self,
+        *,
+        file_handler: FastQFileHandler,
+        target_fun,
+        host: str,
+        port: str,
+        outfile: Path | None = None
     ):
         """Initializes the Server object.
 
         Args:
-            data:
-                The data to be processed.
+            file_handler (FastQFileHandler):
+                A file handler instance with the fastq data to be processed.
             target_fun:
                 The function to be executed on the data.
             host (str):
@@ -162,7 +166,7 @@ class Server(mp.Process):
                 The file output should be saved to.
         """
         super().__init__()
-        self.data = data
+        self.file_handler = file_handler
         self.target_fun = target_fun
         self.host: str = host
         self.port: str = port
@@ -176,26 +180,23 @@ class Server(mp.Process):
 
         It will keep the server and manager running until all jobs have been returned.
         """
-        # Check if there was even data supplied, otherwise just stop the server
-        if not self.data:
-            print("Server has nothing to do!")
-            return
+        # Use the file handler to generate the chunks to be processed
+        unprocessed_chunks = self.file_handler.chunk_generator()
 
         # Start a shared manager server and access its queues
         with self.__create_manager() as manager:
             shared_job_queue = manager.get_job_queue()
             shared_result_queue = manager.get_result_queue()
 
-            # Put the data in the job queue
+            # Put the chunks in the job queue
             print("Sending data!")
-            # TODO: Fix data
-            for chunk in self.data:
-                shared_job_queue.put({"function": self.target_fun, "args": (chunk)})
+            for chunk in unprocessed_chunks:
+                shared_job_queue.put({"function": self.target_fun, "chunk_obj": chunk})
             time.sleep(2)
 
             # Get the results from the result queue
             print("Now waiting for results!")
-            results = self.__wait_and_get_results(shared_result_queue)
+            job_results = self.__wait_and_get_results(shared_result_queue)
 
             # Tell the client process no more data will be forthcoming
             print("Time to kill some peons!")
@@ -203,7 +204,10 @@ class Server(mp.Process):
             # Sleep 5 seconds to give connected clients the chance to properly shut down
             time.sleep(5)
             print("Server finished")
-        print(results)
+
+        # Finalize by further processing the results
+        processed_chunks = (job_dict["result"] for job_dict in job_results)
+        self.file_handler.process_results(processed_chunks)
 
     def __create_manager(self):
         """Creates and starts manager with the job and result queues on the socket."""
@@ -244,7 +248,7 @@ class Server(mp.Process):
                 print("Got a result!")
 
                 # When all data has been processed, stop the loop waiting for results
-                if len(results) == len(self.data):
+                if len(results) == self.file_handler.chunk_count:
                     print("Got all results!")
                     break
             except queue.Empty:
@@ -296,7 +300,7 @@ class Peon(mp.Process):
                 # Job received, try executing it
                 try:
                     target_fun = job["function"]
-                    arguments = job["args"]
+                    arguments = job["chunk_obj"]
                     print(f"Peon {self.name} Workwork on {arguments}!")
                     result = target_fun(arguments)
                     self.result_queue.put({"job": job, "result": result})
@@ -403,11 +407,18 @@ def main():
 
     # Checks if script is started as server or client mode
     if args.s:
-        # Server mode
-        data_idk = ["sjon"]
+        # Create file handler instance
+        file_handler = FastQFileHandler(
+            fastq_files=args.fastq_files,
+            output_file=args.output_file,
+            chunk_count=args.chunks,
+            min_chunk_size=1024
+        )
+
+        # Start the server
         server = Server(
-            data=data_idk,
-            target_fun=non_existent,
+            file_handler=file_handler,
+            target_fun=FastQChunk.perform_stuff,
             host=args.host,
             port=args.port,
             outfile=args.output_file,
