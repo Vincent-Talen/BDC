@@ -20,5 +20,6 @@ export INPUT_FILES=("/commons/Themas/Thema12/HPC/rnaseq.fastq" "/data/datasets/r
 #export INPUT_FILES=("/commons/Themas/Thema12/HPC/rnaseq.fastq")
 
 for file_name in "${INPUT_FILES[@]}" ; do
-  parallel --jobs 20 --pipepart --block -1 --regexp --recstart "@.*(/1| 1:.*)\n[A-Za-z\n\.~]" --recend "\n" python3 assignment3.py :::: "$file_name"
+  parallel --jobs 20 --pipepart --block -1 --regexp --recstart "@.*(/1| 1:.*)\n[A-Za-z\n\.~]" --recend "\n" python3 assignment3.py --chunk :::: "$file_name" | \
+  python3 assignment3.py --combine --filename "$file_name"
 done
