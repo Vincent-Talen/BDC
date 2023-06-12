@@ -10,7 +10,7 @@ Usage:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.2"
+__version__ = "0.3"
 
 # IMPORTS
 import argparse
@@ -62,8 +62,14 @@ def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
     bool_array = row_lengths[:, None] > np.arange(row_lengths.max())
     # Create 2-D array containing zeros in the same shape as the boolean array
     complete_array = np.zeros(bool_array.shape, dtype=int)
-    # Place the lines' phred scores (ascii-33) into the 2-D array
-    complete_array[bool_array] = np.concatenate(array_list) - 33
+
+    # Fill the data normally or if phred is true perform ASCII-33 conversion
+    if phred:
+        # Place the lines' phred scores (ascii-33) into the 2-D array
+        complete_array[bool_array] = np.concatenate(array_list) - 33
+    else:
+        # Place the data into the 2-D array
+        complete_array[bool_array] = np.concatenate(array_list)
     return complete_array
 
 
@@ -93,7 +99,7 @@ def main():
         ]
 
         # Create a single array containing all the quality lines' phred scores
-        complete_phred_array = combine_numpy_arrays(quality_array_list)
+        complete_phred_array = combine_numpy_arrays(quality_array_list, phred=True)
 
         # Calculate the sum and count/weight of each column for the chunk
         sum_array = np.sum(complete_phred_array, axis=0)
@@ -102,9 +108,23 @@ def main():
         print("count:", list(position_count_array))
     elif args.combine:
         print(str(args.filename))
+        sum_arrays = []
+        count_arrays = []
         with fileinput.input(mode="r") as file:
             for line in file:
-                print(line.strip())
+                if line.startswith("sum:"):
+                    sum_arrays.append(np.fromstring(line.strip()[6:-1], sep=", "))
+                elif line.startswith("count:"):
+                    count_arrays.append(np.fromstring(line.strip()[8:-1], sep=", "))
+
+        # Combine the sums and position counts of all the chunks of the file
+        total_sum = np.sum(combine_numpy_arrays(sum_arrays), axis=0)
+        total_counts = np.sum(combine_numpy_arrays(count_arrays), axis=0)
+
+        # Calculate the total average phred score per position for the file
+        file_phred_averages = np.divide(total_sum, total_counts, dtype=np.float64)
+        for i, pos in enumerate(file_phred_averages):
+            print(f"{i},{pos}")
 
 
 if __name__ == "__main__":
