@@ -55,7 +55,21 @@ def parse_args():
     return parser.parse_args()
 
 
-def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
+def combine_numpy_arrays(
+    array_list: list[np.ndarray], *, phred: bool = False
+) -> np.ndarray:
+    """Combines a list of numpy arrays into a single 2-D array.
+
+    Args:
+        array_list (list[np.ndarray]):
+            A list of numpy arrays.
+        phred (bool, optional):
+            Boolean indicating if the data needs phred score conversion (ascii-33).
+
+    Returns:
+        np.ndarray:
+            A 2-D numpy array containing the data of the input arrays.
+    """
     # Create array with the length of every line
     row_lengths = np.array([len(item) for item in array_list])
     # Create 2-D boolean array indicating if lines have a character at a position
@@ -74,8 +88,15 @@ def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
 
 
 def quality_line_generator():
+    """Generator that yields the quality lines of a FastQ file.
+
+    Yields:
+        quality_line (bytes):
+            The quality lines of a FastQ file in bytes.
+    """
     with fileinput.input(mode="rb") as file:
-        while header := file.readline():
+        # For as long as there are header lines
+        while file.readline():
             # Skip the sequence and separator line
             file.readline()
             file.readline()
