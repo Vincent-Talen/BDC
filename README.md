@@ -43,7 +43,8 @@ BDC
 │   └── example_output.csv
 ├── .gitignore
 ├── LICENSE
-└── README.md
+├── README.md
+└── environment.yml
 ```
 
 
