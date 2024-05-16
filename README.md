@@ -20,13 +20,23 @@ Description of the course.
 Getting familiar with multiprocessing and other tools used, 
 by creating a script that calculates the average PHRED scores per position in FastQ files.
 
-Tools used: `argparse`, `multiprocessing.Pool`, `pathlib.Path`, `numpy`
+Tools used: `argparse`, `numpy`, `multiprocessing.Pool`
 
-### Assignment2 - Processing the FastQ files on multiple computers
+### Assignment2 - Processing the FastQ files on multiple computers manually
 This assignment is a continuation of assignment1 since it has the same input and output, 
 but computing will now be done on multiple computers using `multiprocessing`s `Process` and `Queue` classes.
 
-Tools used: `argparse`, `multiprocessing.Process`, `multiprocessing.Queue`, `queue.Queue`, `pathlib.Path`
+Tools used: `argparse`, `numpy`, `multiprocessing.Process`, `multiprocessing.Queue`, `queue.Queue`
+
+### Assignment3 - Distributed computing using SLURM and dividing work manually with GNU Parallel
+Instead of manually defining and setting up a server and clients, a `SLURM` batch script is made that distributes the work to multiple computers.
+Inside the batch script `GNU Parallel` is used to divide the files into chunks and create a process executing the script for each chunk.
+Tools used: `argparse`, `numpy`, `fileinput`, `GNU Parallel`, `SLURM`
+
+### Assignment4 - Distributed computing using SLURM and letting MPI divide the work
+Just like the previous assignment, this one also uses `SLURM` to distribute the work to multiple computers.
+What is done differently this time though, is that instead of using `GNU Parallel` to manually divide the work into chunks, `MPI` is used to do this for us.
+Tools used: `argparse`, `numpy`, `fileinput`, `mpi4py.COMM_WORLD`, `SLURM`
 
 
 ---
@@ -41,6 +51,12 @@ BDC
 │   ├── README.md
 │   ├── assignment2.py
 │   └── example_output.csv
+├── Assignment3
+│   ├── assignment3.py
+│   └── assignment3.sh
+├── Assignment4
+│   ├── assignment4.py
+│   └── assignment4.sh
 ├── .gitignore
 ├── LICENSE
 ├── README.md
