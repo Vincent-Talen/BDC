@@ -12,7 +12,6 @@
 #SBATCH --partition=assemblix
 #SBATCH --nodelist=assemblix2019
 #SBATCH --cpus-per-task=20
-#SBATCH --mem-per-cpu=4500MB
 
 source /commons/conda/conda_load.sh
 

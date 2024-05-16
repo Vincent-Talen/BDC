@@ -35,8 +35,8 @@ import time
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 
-assignment1_dir_path = str(Path(__file__).parent.parent.joinpath("Assignment1"))
-sys.path.append(assignment1_dir_path)
+ASSIGNMENT1_DIR_PATH = str(Path(__file__).parent.parent.joinpath("Assignment1"))
+sys.path.append(ASSIGNMENT1_DIR_PATH)
 from assignment1 import FastQChunk, FastQFileHandler
 
 # GLOBALS

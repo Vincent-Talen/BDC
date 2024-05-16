@@ -103,7 +103,7 @@ Each assignment can have different arguments and input data that needs to be gat
 
 ---
 ## Useful links
-* [Course Assignments Website](https://bioinf.nl/~martijn/BDC/BDC.html)  
+* [Course Assignments Website](https://bioinf.nl/~martijn/BDC/2023/)  
 * [Python Multiprocessing Module](https://docs.python.org/3.8/library/multiprocessing.html)  
 * [GNU Parallel](https://www.gnu.org/software/parallel/)  
 * [SLURM Workload Manager](https://slurm.schedmd.com/overview.html)  
