@@ -1,5 +1,5 @@
 # Big Data Computing
-**Bio-Informatics Year 3, Period 12 (2022-2023)**
+**Bio-Informatics Year 3, Period 12 (2023-2024)**
 
 Description of the course.
 
@@ -17,8 +17,8 @@ Description of the course.
 ---
 ## About the course assignments
 ### Assignment1 - Processing FastQ files using multiprocessing.Pool
-Getting familiar with multiprocessing and other tools used, 
-by creating a script that calculates the average PHRED scores per position in FastQ files.
+To get familiar with the concept of splitting workload we start by using multiprocessing to use multiple cores on a single machine.
+The script created calculates the average PHRED score per position of FastQ files.
 
 Tools used: `argparse`, `multiprocessing.Pool`, `pathlib.Path`, `numpy`
 
@@ -50,44 +50,41 @@ BDC
 
 ---
 ## Installation
-This project is made on, and only intended for, use on a Linux system. Guarantees can not be made for other operating systems.
+This project is made on, and is only intended for, use on a Linux system. Guarantees can not be made for other operating systems.
+The reason is that some methods/techniques used in the assignments are Linux-specific.
 
-### Conda/Mambaforge
-To manage the virtual environment and dependencies the [Conda](https://conda.io/)-based Python3 distribution [Mambaforge](https://github.com/conda-forge/miniforge#mambaforge) is used.
-Mambaforge provides the required Python and Conda commands, but also includes Mamba, an extremely fast and robust replacement for the Conda package manager. 
-Since the default conda solver is large, slow and sometimes has issues with selecting the latest package releases.
+### Bioinformatics network
+This repository and its scripts are made for a course that is a part of the bioinformatics study, thus they are made to be executed on the bioinformatics network of the Hanze. 
+Because the grading of the scripts is done in a certain way and specific programs are used for *High-Throughput Computing* clusters, that are difficult to install and not even meant for normal computers,
+it is difficult to run the scripts on a different network, with some even requiring changes to be made to them.
+When using the scripts on the bioinformatics network, no installation is required except for cloning this repository.
 
-Download the latest installer script of Mambaforge for your OS from https://github.com/conda-forge/miniforge#mambaforge and follow the instructions listed there to install it.
+### A different network/computer
+It might be possible to use some scripts on a different network or computer without a lot of effort, but some scripts need a lot more effort and/or changes to them to work.
+Because it is outside the scope/intentions of this project to do this, there won't be detailed instructions on how to do this.
 
-### Create environment
-The first thing that needs to be done before being able to run the scripts, is to create the environment with all the required dependencies. 
-This is easily done using Mamba and the `environment.yml` file included in this repository.
-
-Open a terminal and ensure your terminal has the base mamba environment activated with
-```bash
-mamba activate base
-```
-Then make sure the working directory is the root of this repository and then simply use the following command to create the environment:
-```bash
-mamba env create
-```
-This will name the environment `bdc`, if desired it can be given another name by adding `--name your-desired-name`.
+Some things that will need to be done may include installing conda and creating an environment, installing SLURM, installing MPI (for python) and installing Spark.
 
 
 ---
 ## Usage
-When running the script of an assignment, the working directory should be set to that of the assignment and the `bdc` environment should be activated.
-Activate the environment by running the following command (if your environment is named differently replace `bdc` with that name):
+When running the script of an assignment, the working directory should be set to that of the assignment and the correct conda environment should be activated.
+If you already have conda active you can simply use the following to activate the environment:
 ```bash
-mamba activate bdc
+conda activate /commons/conda/dsls
 ```
+When you do not have conda active yet, you can activate it and the environment immediately too by running the following command:
+```bash
+source /commons/conda/conda_load.sh
+```
+
 After the environment is activated the scripts can then be run by calling them with their required parameters.  
-Each assignment can have different arguments and input data that needs to be gathered, so for more instructions the README for that assignment should be checked.
+Each assignment has different methods and arguments that need to be used to execute them, so for these instructions refer to the README of that specific assignment.
 
 
 ---
 ## Useful links
-* [Course Assignments Website](https://bioinf.nl/~martijn/BDC/BDC.html)  
+* [Course Assignments Website](https://bioinf.nl/~martijn/BDC/)  
 * [Python Multiprocessing Module](https://docs.python.org/3.8/library/multiprocessing.html)  
 * [GNU Parallel](https://www.gnu.org/software/parallel/)  
 * [SLURM Workload Manager](https://slurm.schedmd.com/overview.html)  

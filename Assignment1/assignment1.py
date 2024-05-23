@@ -2,6 +2,7 @@
 
 """Script that calculates the mean PHRED scores per base position for FastQ files.
 
+Includes two classes to handle FastQ files and chunks of them.
 To decrease the runtime, the script does this parallelized using multiprocessing.Pool.
 
 Usage:
@@ -13,14 +14,14 @@ Usage:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "2.2"
+__version__ = "2.3"
 
 # IMPORTS
 import argparse
 import multiprocessing as mp
 import sys
-from operator import itemgetter
 
+from operator import itemgetter
 from pathlib import Path
 from typing import BinaryIO
 
@@ -28,7 +29,7 @@ import numpy as np
 
 
 # FUNCTIONS
-def parse_args():
+def parse_cli_args():
     """Parses the arguments given to the script.
 
     Returns:
@@ -64,6 +65,20 @@ def parse_args():
 
 
 def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
+    """Combines a list of numpy arrays into a single 2-D array.
+
+    It can handle there being different sized arrays completely fine and is also able to
+    apply phred score conversion (ascii-33) to the data vectorized for all lines at once.
+
+    Args:
+        array_list: A list of numpy arrays.
+
+    Keyword Args:
+        phred: Boolean indicating if the data needs phred score conversion (ascii-33).
+
+    Returns:
+        A 2-D np.ndarray containing the data of the input arrays.
+    """
     # Create array with the length of every line
     row_lengths = np.array([len(item) for item in array_list])
     # Create 2-D boolean array indicating if lines have a character at a position
@@ -82,16 +97,51 @@ def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
 
 
 # CLASSES
+class FileEmptyError(Exception):
+    """Custom exception class for when files are empty."""
+    pass
+
+
 class FastQChunk:
+    """Class representing a byte chunk of a FastQ file.
+
+    Because it is given a byte start and stop offset, which could be in the middle of
+    a line, it first ensures correct positioning at the start of a FastQ entry+line.
+    It then reads only the quality lines and calculates the sum of the phred scores per
+    column and counts the amount of lines that have a character in a certain position.
+
+    Attributes:
+        filepath: The path to the FastQ file it belongs to.
+        start_offset: The byte offset where the chunk starts.
+        stop_offset: The byte offset where the chunk stops.
+        sum_array: The sum of the phred scores per column.
+        position_count_array: The amount of lines that have a character in a position.
+    """
     def __init__(self, filepath: Path, start_offset: int, stop_offset: int):
+        """Initializes a FastQChunk object.
+
+        Args:
+            filepath: The path to the FastQ file.
+            start_offset: The byte offset where the chunk starts.
+            stop_offset: The byte offset where the chunk stops.
+        """
         self.filepath: Path = filepath
         self.start_offset: int = start_offset
         self.stop_offset: int = stop_offset
 
-        self.sum_array: np.ndarray = None
-        self.position_count_array: np.ndarray = None
+        self.sum_array: np.ndarray | None = None
+        self.position_count_array: np.ndarray | None = None
 
-    def perform_stuff(self):
+    def perform_stuff(self) -> "FastQChunk":
+        """This method is what actually performs the calculations on the chunk.
+
+        It reads the quality lines of the FastQ entries in the chunk and calculates the
+        sum of the phred scores per column and the count of lines that have a character
+        in a certain position.
+
+        Returns:
+            The current FastQChunk instance with the results saved in its attributes.
+        """
         # Get the quality lines as ascii unsigned integers in numpy arrays
         quality_array_list = [
             np.frombuffer(line, dtype=np.uint8)
@@ -108,7 +158,12 @@ class FastQChunk:
         # Return the current chunk instance
         return self
 
-    def quality_line_generator(self):
+    def quality_line_generator(self) -> bytes:
+        """Generator that only yields the quality lines of FastQ entries.
+
+        Yields:
+            The quality line of a FastQ entry as a bytes object.
+        """
         with open(self.filepath, "rb") as file:
             # Go to the chunk start offset in the file
             file.seek(self.start_offset)
@@ -125,27 +180,33 @@ class FastQChunk:
                 # Yield the quality line
                 yield file.readline().strip()
 
-    def _ensure_correct_positioning(self, file_obj: BinaryIO):
+    def _ensure_correct_positioning(self, file_obj: BinaryIO) -> None:
+        """Ensures the file cursor is positioned at the start of a FastQ entry.
+
+        By reading the next line after the cursor position, it can determine if the
+        cursor is positioned at the start of a FastQ entry if the next line is a header
+        line. Because it is possible for a quality line to start with an '@' character,
+        this edge-case is also checked and accounted for.
+
+        Args:
+            file_obj: The file object to position the cursor for.
+        """
         correctly_positioned: bool = False
+        byte_position: int = file_obj.tell()
         while not correctly_positioned and file_obj.tell() < self.stop_offset:
             # Remember the byte position before the line is read
             byte_position = file_obj.tell()
 
-            # Read the next line, it should be a header line if it starts with an @
             first_line = file_obj.readline()
             if first_line.startswith(b"@"):
-                # By chance the quality line can actually also start with an @
-                # To be sure which line we're at we'll check the next line after it too
+                # Check if this is not by chance a quality line that starts with an @
                 byte_position_before_second_line = file_obj.tell()
                 second_line = file_obj.readline()
                 if second_line.startswith(b"@"):
-                    # If the second line starts with @, the first was the quality line
-                    # So the second is the header, which we want to position in front of
+                    # If the second line starts with an @, the first was a quality line
                     byte_position = byte_position_before_second_line
                     correctly_positioned = True
                 else:
-                    # If the second line does not start with @, the first was the header
-                    # Do nothing since byte_position is already the correct position
                     correctly_positioned = True
 
         # Go back to the correct byte position in the file object
@@ -153,20 +214,43 @@ class FastQChunk:
 
 
 class FastQFileHandler:
+    """Class that handles FastQ files and can split them in chunks.
+
+    Attributes:
+        file_paths: A list of paths to the FastQ files to process.
+        output_file: The path to the output file to save the results to.
+        chunk_count: The amount of chunks to divide the files into.
+        min_chunk_size: The minimum size a chunk should be.
+    """
     def __init__(
         self,
         fastq_files: list[Path],
-        output_file: Path | None,
+        output_file: Path | None = None,
         chunk_count: int = 4,
         min_chunk_size: int = 1024
     ):
+        """Initializes a FastQFileHandler object.
+
+        It is also checked if the input files exist and are not empty.
+
+        Args:
+            fastq_files: A list of paths to the FastQ files to process.
+            output_file: The path to the output file to save the results to.
+            chunk_count: The amount of chunks to divide the files into.
+            min_chunk_size: The minimum size a chunk should be.
+        """
         self.file_paths: list[Path] = fastq_files
         self.output_file: Path | None = output_file
         self.chunk_count: int = chunk_count
         self.min_chunk_size: int = min_chunk_size
-        self._check_if_input_files_exist_and_not_empty()
+        self._check_if_input_files_exist_and_are_not_empty()
 
-    def _check_if_input_files_exist_and_not_empty(self):
+    def _check_if_input_files_exist_and_are_not_empty(self) -> None:
+        """Checks if all the input files exist and if they are not empty.
+
+        To be able to display the error for each file, it collects the error strings
+        in a list and if there are any they are all printed and the program exits.
+        """
         file_error_strings = []
         for file_path in self.file_paths:
             if not file_path.exists():
@@ -179,22 +263,31 @@ class FastQFileHandler:
             sys.exit(1)
 
     def _proportionally_divide_chunks_between_files(self) -> dict[Path, int]:
+        """Divides the chunks proportionally between the files.
+
+        At first, it gives every file 1 chunk and if there are any more unallocated it
+        will calculate the quota for which size a file should get an extra chunk. Using
+        this quota, it will give the files more chunks based on their byte size.
+
+        Returns:
+            A dictionary with the file paths as keys and the amount of chunks as values.
+        """
         # Initialize a dictionary with each file having 1 initial chunk
-        file_chunks_dict = {file_path: 1 for file_path in self.file_paths}
+        files_chunk_counts = {file_path: 1 for file_path in self.file_paths}
 
         # Get the byte size of each file and unallocated chunks after giving each file 1
         file_sizes = [file_path.stat().st_size for file_path in self.file_paths]
         unallocated_chunks = self.chunk_count - len(file_sizes)
 
-        # Calculate the quota at which size an extra core is given to a file
+        # Calculate the quota (the size an extra core is given to a file)
         quota = sum(file_sizes) / (1 + unallocated_chunks)
-        # Calculate the fractional amount of times the quota fits in the file byte sizes
+        # Calculate the fractional amount of times the quota fits in files' byte sizes
         fractions = [file_size / quota for file_size in file_sizes]
 
         # Give each file the amount of chunks that fully fit in the file size
-        for i, file_path in enumerate(file_chunks_dict):
+        for i, file_path in enumerate(files_chunk_counts):
             allocated_chunks = int(fractions[i])
-            file_chunks_dict[file_path] += allocated_chunks
+            files_chunk_counts[file_path] += allocated_chunks
             unallocated_chunks -= allocated_chunks
             fractions[i] -= allocated_chunks
 
@@ -207,26 +300,34 @@ class FastQFileHandler:
             sorted_fractions = sorted(fraction_tuples, key=itemgetter(1), reverse=True)
             # Give `unallocated chunks` amount of files an extra core
             for file_path, _ in sorted_fractions[:unallocated_chunks]:
-                file_chunks_dict[file_path] += 1
+                files_chunk_counts[file_path] += 1
 
         # Return the dictionary with the file paths and their allocated chunks
-        return file_chunks_dict
+        return files_chunk_counts
 
-    def chunk_generator(self):
+    def generate_chunks(self) -> FastQChunk:
+        """Generates FastQChunk objects for the files and chunks.
+
+        It allocates the amount of chunks available to the files and then generates
+        FastQChunk objects for each file, each with specific byte offsets.
+
+        Yields:
+            FastQChunk objects that belong to a file and have start & stop byte offsets.
+        """
         if len(self.file_paths) == 1:
             # When only given one file it can use all the chunks
-            file_chunks_dict = {self.file_paths[0]: self.chunk_count}
+            files_chunk_counts = {self.file_paths[0]: self.chunk_count}
         elif len(self.file_paths) < self.chunk_count:
             # If there are more chunks than files, divide chunks proportionally
-            file_chunks_dict = self._proportionally_divide_chunks_between_files()
+            files_chunk_counts = self._proportionally_divide_chunks_between_files()
         else:
             # Use 1 chunk per file if there are more, or as many files as chunks
-            file_chunks_dict = {file_path: 1 for file_path in self.file_paths}
+            files_chunk_counts = {file_path: 1 for file_path in self.file_paths}
 
         for filepath in self.file_paths:
             # Get the byte size and allocated chunks for the current file
             file_byte_size = filepath.stat().st_size
-            allocated_chunks = file_chunks_dict[filepath]
+            allocated_chunks = files_chunk_counts[filepath]
 
             # Calculate chunk sizes and remainder of bytes
             quotient, remainder = divmod(file_byte_size, allocated_chunks)
@@ -242,7 +343,13 @@ class FastQFileHandler:
                 stop = (i + 1) * quotient + min(i + 1, remainder)
                 yield FastQChunk(filepath, start, stop)
 
-    def process_results(self, processed_chunks: list[FastQChunk]):
+    def process_results(self, processed_chunks: list[FastQChunk]) -> None:
+        """Processes the partial results of FastQChunk objects per file.
+
+        When all the chunks have calculated their sums and position counts, the results
+        are combined per file and the total average phred score per position is
+        calculated and saved to the output file or printed to stdout.
+        """
         # Create dictionary to put chunks in per file
         chunks_per_file = {file_path: [] for file_path in self.file_paths}
 
@@ -273,7 +380,12 @@ class FastQFileHandler:
 
     def show_results_for_file(
         self, input_file_path: Path, file_phred_averages: np.ndarray
-    ):
+    ) -> None:
+        """Handles showing the results for a single FastQ file.
+
+        If an output file was specified it will save the results to that file, otherwise
+        it will simply print the results to stdout.
+        """
         if output_path := self.output_file:
             if len(self.file_paths) > 1:
                 output_path = self.output_file.parent.joinpath(
@@ -291,16 +403,16 @@ class FastQFileHandler:
 def main():
     """Main function of the script."""
     # Parse arguments
-    args = parse_args()
+    args = parse_cli_args()
 
     # Create file handler and use it to generate chunks
     file_handler = FastQFileHandler(
         fastq_files=args.fastq_files,
         output_file=args.output_file,
         chunk_count=args.cpu_count,
-        min_chunk_size=1024
+        min_chunk_size=4096
     )
-    unprocessed_chunks = file_handler.chunk_generator()
+    unprocessed_chunks = file_handler.generate_chunks()
 
     # Initialize and create multiprocessing pool
     with mp.Pool(processes=args.cpu_count) as pool:
