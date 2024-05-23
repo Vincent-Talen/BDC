@@ -83,16 +83,17 @@ def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
     row_lengths = np.array([len(item) for item in array_list])
     # Create 2-D boolean array indicating if lines have a character at a position
     bool_array = row_lengths[:, None] > np.arange(row_lengths.max())
-    # Create 2-D array containing zeros in the same shape as the boolean array
-    complete_array = np.zeros(bool_array.shape, dtype=int)
+    # Create 2-D array containing zeros for characters and NaN for empty positions
+    complete_array = np.full(bool_array.shape, np.nan)
 
-    # Fill the data normally or if phred is true perform ASCII-33 conversion
+    # Concatenate the data of the lines into a 1-D array
+    concatenated_array = np.concatenate(array_list)
+    # If phred is True, perform conversion to phred scores (ASCII - 33)
     if phred:
-        # Place the lines' phred scores (ascii-33) into the 2-D array
-        complete_array[bool_array] = np.concatenate(array_list) - 33
-    else:
-        # Place the data into the 2-D array
-        complete_array[bool_array] = np.concatenate(array_list)
+        concatenated_array = concatenated_array - 33
+
+    # Place the concatenated data into the 2-D array using the boolean mask
+    complete_array[bool_array] = concatenated_array
     return complete_array
 
 
@@ -152,8 +153,10 @@ class FastQChunk:
         complete_phred_array = combine_numpy_arrays(quality_array_list, phred=True)
 
         # Calculate the sum and count/weight of each column for the chunk
-        self.sum_array = np.sum(complete_phred_array, axis=0)
-        self.position_count_array = np.count_nonzero(complete_phred_array, axis=0)
+        self.sum_array = np.nansum(complete_phred_array, axis=0)
+        self.position_count_array = np.count_nonzero(
+            ~np.isnan(complete_phred_array), axis=0
+        )
 
         # Return the current chunk instance
         return self
