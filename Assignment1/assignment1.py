@@ -5,7 +5,7 @@
 Includes two classes to handle FastQ files and chunks of them.
 To decrease the runtime, the script does this parallelized using multiprocessing.Pool.
 
-Usage:
+Examples:
     $ python3 assignment1.py
         -n <cpu_count>
         [-o <output csv file>]
@@ -14,7 +14,7 @@ Usage:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "2.3"
+__version__ = "2.4"
 
 # IMPORTS
 import argparse
@@ -29,11 +29,11 @@ import numpy as np
 
 
 # FUNCTIONS
-def parse_cli_args():
-    """Parses the arguments given to the script.
+def parse_cli_args() -> argparse.Namespace:
+    """Parses the CLI arguments given to the script.
 
     Returns:
-        args: The parsed arguments.
+        The parsed arguments as a Namespace.
     """
     parser = argparse.ArgumentParser(
         description="Script for Assignment 1 of the Big Data Computing course."
@@ -64,11 +64,13 @@ def parse_cli_args():
     return parser.parse_args()
 
 
-def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
+def combine_numpy_arrays(
+    array_list: list[np.ndarray], *, phred: bool = False
+) -> np.ndarray:
     """Combines a list of numpy arrays into a single 2-D array.
 
-    It can handle there being different sized arrays completely fine and is also able to
-    apply phred score conversion (ascii-33) to the data vectorized for all lines at once.
+    It can handle differently sized arrays completely fine and is also able to apply
+    vectorized phred score conversion (ascii-33) to the data for all lines at once.
 
     Args:
         array_list: A list of numpy arrays.
@@ -100,7 +102,6 @@ def combine_numpy_arrays(array_list: list[np.ndarray], *, phred: bool = False):
 # CLASSES
 class FileEmptyError(Exception):
     """Custom exception class for when files are empty."""
-    pass
 
 
 class FastQChunk:
@@ -119,7 +120,7 @@ class FastQChunk:
         position_count_array: The amount of lines that have a character in a position.
     """
     def __init__(self, filepath: Path, start_offset: int, stop_offset: int):
-        """Initializes a FastQChunk object.
+        """Initializes a FastQChunk instance.
 
         Args:
             filepath: The path to the FastQ file.
@@ -133,8 +134,8 @@ class FastQChunk:
         self.sum_array: np.ndarray | None = None
         self.position_count_array: np.ndarray | None = None
 
-    def perform_stuff(self) -> "FastQChunk":
-        """This method is what actually performs the calculations on the chunk.
+    def perform_calculations(self) -> "FastQChunk":
+        """This method is what actually performs the calculations for the chunk.
 
         It reads the quality lines of the FastQ entries in the chunk and calculates the
         sum of the phred scores per column and the count of lines that have a character
@@ -232,7 +233,7 @@ class FastQFileHandler:
         chunk_count: int = 4,
         min_chunk_size: int = 1024
     ):
-        """Initializes a FastQFileHandler object.
+        """Initializes a FastQFileHandler instance.
 
         It is also checked if the input files exist and are not empty.
 
@@ -253,7 +254,13 @@ class FastQFileHandler:
 
         To be able to display the error for each file, it collects the error strings
         in a list and if there are any they are all printed and the program exits.
+
+        Raises:
+            FileNotFoundError: If no files were given at all.
         """
+        if not self.file_paths:
+            raise FileNotFoundError("No files were given to process!")
+
         file_error_strings = []
         for file_path in self.file_paths:
             if not file_path.exists():
@@ -419,7 +426,7 @@ def main():
 
     # Initialize and create multiprocessing pool
     with mp.Pool(processes=args.cpu_count) as pool:
-        processed_chunks = pool.map(FastQChunk.perform_stuff, unprocessed_chunks)
+        processed_chunks = pool.map(FastQChunk.perform_calculations, unprocessed_chunks)
 
     # Finalize by further processing the results
     file_handler.process_results(processed_chunks)

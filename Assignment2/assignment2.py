@@ -5,25 +5,25 @@
 To decrease the runtime, the load is split between multiple computers using
 the multiprocessing Process and Queue classes.
 
-Starting a server:
+Examples:
     $ python assignment2.py
         -s
         --host localhost
         --port 25715
-        --chunks 4
-        -o output.csv
+        [--chunks 4]
+        [-o output.csv]
+        fastq_file1.fastq [fastq_file2.fastq ... fastq_fileN.fastq]
 
-Starting a client:
     $ python assignment2.py
         -c
         --host localhost
         --port 25715
-        -n 4
+        [-n 4]
 """
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "1.2"
+__version__ = "1.3"
 
 # IMPORTS
 import argparse
@@ -31,12 +31,13 @@ import multiprocessing as mp
 import queue
 import sys
 import time
+from collections.abc import Callable
 
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 
-assignment1_dir_path = str(Path(__file__).parent.parent.joinpath("Assignment1"))
-sys.path.append(assignment1_dir_path)
+A1_DIR = str(Path(__file__).parent.parent.joinpath("Assignment1"))
+sys.path.append(A1_DIR)
 from assignment1 import FastQChunk, FastQFileHandler
 
 # GLOBALS
@@ -46,11 +47,11 @@ AUTHKEY = b"yeahthisissecretdidyoureallythinkiwouldtellyou?"
 
 
 # FUNCTIONS
-def parse_args():
-    """Parses the arguments given to the script.
+def parse_args() -> argparse.Namespace:
+    """Parses the CLI arguments given to the script.
 
     Returns:
-        args: The parsed arguments.
+        The parsed arguments as a Namespace.
     """
     # Initialize the parser
     parser = argparse.ArgumentParser(
@@ -87,7 +88,7 @@ def parse_args():
     )
 
     # Create group with server mode arguments
-    server_args = parser.add_argument_group(title="Arguments when run in server mode")
+    server_args = parser.add_argument_group(title="Arguments when ran in server mode")
     server_args.add_argument(
         "--chunks",
         action="store",
@@ -113,7 +114,7 @@ def parse_args():
     )
 
     # Create group with client mode arguments
-    client_args = parser.add_argument_group(title="Arguments when run in client mode")
+    client_args = parser.add_argument_group(title="Arguments when ran in client mode")
     client_args.add_argument(
         "-n",
         action="store",
@@ -131,39 +132,29 @@ class Server(mp.Process):
     """Splits the data into chunks and starts socket client can connect to for the jobs.
 
     Attributes:
-        file_handler (FastQFileHandler):
-            A file handler instance with the fastq data to be processed.
-        target_fun:
-            The function to be executed on the data.
-        host (str):
-            The hostname the Server will open the socket at.
-        port (str):
-            The port the Server will open the socket at.
-        outfile (Path | None):
-            The file output should be saved to.
+        file_handler: A file handler instance with the fastq data to be processed.
+        target_fun: The function to be executed on the data.
+        host: The hostname the Server will open the socket at.
+        port: The port the Server will open the socket at.
+        outfile: Optional file the output should be saved to instead of stdout.
     """
     def __init__(
         self,
         *,
         file_handler: FastQFileHandler,
-        target_fun,
+        target_fun: Callable,
         host: str,
         port: str,
         outfile: Path | None = None
     ):
-        """Initializes the Server object.
+        """Initializes a Server instance.
 
         Args:
-            file_handler (FastQFileHandler):
-                A file handler instance with the fastq data to be processed.
-            target_fun:
-                The function to be executed on the data.
-            host (str):
-                The hostname the Server will open the socket at.
-            port (str):
-                The port the Server will open the socket at.
-            outfile (Path | None):
-                The file output should be saved to.
+            file_handler: A file handler instance with the fastq data to be processed.
+            target_fun: The function to be executed on the data.
+            host: The hostname the Server will open the socket at.
+            port: The port the Server will open the socket at.
+            outfile: Optional file the output should be saved to instead of stdout.
         """
         super().__init__()
         self.file_handler = file_handler
@@ -172,7 +163,7 @@ class Server(mp.Process):
         self.port: str = port
         self.outfile: Path | None = outfile
 
-    def run(self):
+    def run(self) -> None:
         """Starts the server process, creates manager and fills the job queue with data.
 
         This method is called when the process is started with the start() method,
@@ -181,7 +172,7 @@ class Server(mp.Process):
         It will keep the server and manager running until all jobs have been returned.
         """
         # Use the file handler to generate the chunks to be processed
-        unprocessed_chunks = self.file_handler.chunk_generator()
+        unprocessed_chunks = self.file_handler.generate_chunks()
 
         # Start a shared manager server and access its queues
         with self.__create_manager() as manager:
@@ -209,7 +200,7 @@ class Server(mp.Process):
         processed_chunks = (job_dict["result"] for job_dict in job_results)
         self.file_handler.process_results(processed_chunks)
 
-    def __create_manager(self):
+    def __create_manager(self) -> "ServerSideManager":
         """Creates and starts manager with the job and result queues on the socket."""
         # Initialize the job and result queues
         job_queue = queue.Queue()
@@ -229,14 +220,16 @@ class Server(mp.Process):
         print(f"Server started at {self.host}:{self.port}")
         return manager
 
-    def __wait_and_get_results(self, shared_result_queue: queue.Queue):
+    def __wait_and_get_results(self, shared_result_queue: queue.Queue) -> list[dict]:
         """Waits for results to be put in the result queue and returns them.
 
         It keeps checking the result queue until all results have been returned.
 
         Args:
-            shared_result_queue (queue.Queue):
-                The queue to get the results from.
+            shared_result_queue: The queue to get the results from.
+
+        Returns:
+            A list of dictionaries containing the job and its result.
         """
         results = []
         while True:
@@ -261,25 +254,21 @@ class Peon(mp.Process):
     """Gets jobs from the job queue and executes them.
 
     Attributes:
-        job_queue (queue.Queue):
-            The queue to get the jobs from.
-        result_queue (queue.Queue):
-            The queue to put the results in.
+        job_queue: The queue to get the jobs from.
+        result_queue: The queue to put the results in.
     """
     def __init__(self, job_queue: queue.Queue, result_queue: queue.Queue):
-        """Initializes the Peon object.
+        """Initializes a Peon instance.
 
         Args:
-            job_queue (queue.Queue):
-                The queue to get the jobs from.
-            result_queue (queue.Queue):
-                The queue to put the results in.
+            job_queue: The queue to get the jobs from.
+            result_queue: The queue to put the results in.
         """
         super().__init__()
         self.job_queue = job_queue
         self.result_queue = result_queue
 
-    def run(self):
+    def run(self) -> None:
         """Starts the peon process, gets jobs from the job queue and executes them.
 
         This method is called when the process is started with the start() method,
@@ -317,12 +306,9 @@ class Client(mp.Process):
     """Creates a client process that connects to the manager server and starts workers.
 
     Attributes:
-        host (str):
-            The host address of the manager server.
-        port (str):
-            The port of the manager server.
-        core_count (int):
-            The number of workers to start.
+        host: The host address of the manager server.
+        port: The port of the manager server.
+        core_count: The number of workers to start.
     """
     def __init__(
         self,
@@ -331,22 +317,19 @@ class Client(mp.Process):
         port: str,
         core_count: int,
     ):
-        """Initializes the Client object.
+        """Initializes a Client instance.
 
         Args:
-            host (str):
-                The host address of the manager server.
-            port (str):
-                The port of the manager server.
-            core_count (int):
-                The number of workers to start.
+            host: The host address of the manager server.
+            port: The port of the manager server.
+            core_count: The number of workers to start.
         """
         super().__init__()
         self.host: str = host
         self.port: str = port
         self.core_count: int = core_count
 
-    def run(self):
+    def run(self) -> None:
         """Starts the client process, connects to the manager server and starts workers.
 
         This method is called when the process is started with the start() method,
@@ -360,7 +343,7 @@ class Client(mp.Process):
         # Start the workers
         self.__run_workers(job_queue, result_queue)
 
-    def __create_manager(self):
+    def __create_manager(self) -> "ClientSideManager":
         """Creates and connects a client manager to the manager server's socket."""
         # Create a custom manager class and register the queues
         class ClientSideManager(BaseManager):
@@ -372,18 +355,15 @@ class Client(mp.Process):
         # Create instance of the custom manager and connect to the server with it
         manager = ClientSideManager(address=(self.host, self.port), authkey=AUTHKEY)
         manager.connect()
-
         print(f"Client connected to {self.host}:{self.port}")
         return manager
 
-    def __run_workers(self, job_queue: queue.Queue, result_queue: queue.Queue):
-        """Starts worker peons and waits for them to finish.
+    def __run_workers(self, job_queue: queue.Queue, result_queue: queue.Queue) -> None:
+        """Creates and starts peons (workers) and waits for them to finish.
 
         Args:
-            job_queue (queue.Queue):
-                The queue to get the jobs from.
-            result_queue (queue.Queue):
-                The queue to put the results in.
+            job_queue: The queue to get the jobs from.
+            result_queue: The queue to put the results in.
         """
         processes = []
 
@@ -418,7 +398,7 @@ def main():
         # Start the server
         server = Server(
             file_handler=file_handler,
-            target_fun=FastQChunk.perform_stuff,
+            target_fun=FastQChunk.perform_calculations,
             host=args.host,
             port=args.port,
             outfile=args.output_file,

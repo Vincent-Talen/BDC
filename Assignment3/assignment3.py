@@ -4,13 +4,15 @@
 
 The script expects STDIN to have lines!
 
-Usage:
-    $ python3 assignment3.py
+Examples:
+    $ python3 assignment3.py --chunk
+
+    $ python3 assignment3.py --combine --filename <fastq_file.fastq>
 """
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.3"
+__version__ = "0.4"
 
 # IMPORTS
 import argparse
@@ -21,23 +23,20 @@ from pathlib import Path
 
 import numpy as np
 
+A1_DIR = str(Path(__file__).parent.parent.joinpath("Assignment1"))
+sys.path.append(A1_DIR)
+from assignment1 import combine_numpy_arrays
+
 
 # FUNCTIONS
-def parse_args():
-    """Parses the arguments given to the script.
+def parse_args() -> argparse.Namespace:
+    """Parses the CLI arguments given to the script.
 
     Returns:
-        args: The parsed arguments.
+        The parsed arguments as a Namespace.
     """
     parser = argparse.ArgumentParser(
         description="Script for Assignment 3 of the Big Data Computing course."
-    )
-    parser.add_argument(
-        "--filename",
-        action="store",
-        type=Path,
-        required=False,
-        help="The name of the fastq input file."
     )
 
     # Create the mutually exclusive group for the mode
@@ -52,47 +51,24 @@ def parse_args():
         action="store_true",
         help="Run the program in combine mode; calculating the total mean of a file",
     )
+
+    # Create group with combine mode arguments
+    combine_args = parser.add_argument_group(title="Arguments when ran in combine mode")
+    combine_args.add_argument(
+        "--filename",
+        action="store",
+        type=Path,
+        required=False,
+        help="The name of the fastq input file."
+    )
     return parser.parse_args()
 
 
-def combine_numpy_arrays(
-    array_list: list[np.ndarray], *, phred: bool = False
-) -> np.ndarray:
-    """Combines a list of numpy arrays into a single 2-D array.
-
-    Args:
-        array_list (list[np.ndarray]):
-            A list of numpy arrays.
-        phred (bool, optional):
-            Boolean indicating if the data needs phred score conversion (ascii-33).
-
-    Returns:
-        np.ndarray:
-            A 2-D numpy array containing the data of the input arrays.
-    """
-    # Create array with the length of every line
-    row_lengths = np.array([len(item) for item in array_list])
-    # Create 2-D boolean array indicating if lines have a character at a position
-    bool_array = row_lengths[:, None] > np.arange(row_lengths.max())
-    # Create 2-D array containing zeros in the same shape as the boolean array
-    complete_array = np.zeros(bool_array.shape, dtype=int)
-
-    # Fill the data normally or if phred is true perform ASCII-33 conversion
-    if phred:
-        # Place the lines' phred scores (ascii-33) into the 2-D array
-        complete_array[bool_array] = np.concatenate(array_list) - 33
-    else:
-        # Place the data into the 2-D array
-        complete_array[bool_array] = np.concatenate(array_list)
-    return complete_array
-
-
-def quality_line_generator():
-    """Generator that yields the quality lines of a FastQ file.
+def quality_line_generator() -> bytes:
+    """Generator that only yields the quality lines of FastQ entries.
 
     Yields:
-        quality_line (bytes):
-            The quality lines of a FastQ file in bytes.
+        The quality line of a FastQ entry as a bytes object.
     """
     with fileinput.input(mode="rb") as file:
         # For as long as there are header lines
