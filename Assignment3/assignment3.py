@@ -99,8 +99,8 @@ def main():
         complete_phred_array = combine_numpy_arrays(quality_array_list, phred=True)
 
         # Calculate the sum and count/weight of each column for the chunk
-        sum_array = np.sum(complete_phred_array, axis=0)
-        position_count_array = np.count_nonzero(complete_phred_array, axis=0)
+        sum_array = np.nansum(complete_phred_array, axis=0)
+        position_count_array = np.count_nonzero(~np.isnan(complete_phred_array), axis=0)
         print("sum:", list(sum_array))
         print("count:", list(position_count_array))
     elif args.combine:
