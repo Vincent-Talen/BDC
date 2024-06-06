@@ -86,10 +86,10 @@ def combine_numpy_arrays(
     # Create 2-D boolean array indicating if lines have a character at a position
     bool_array = row_lengths[:, None] > np.arange(row_lengths.max())
     # Create 2-D array containing zeros for characters and NaN for empty positions
-    complete_array = np.full(bool_array.shape, np.nan)
+    complete_array = np.full(bool_array.shape, np.nan, dtype=np.float64)
 
     # Concatenate the data of the lines into a 1-D array
-    concatenated_array = np.concatenate(array_list)
+    concatenated_array = np.concatenate(array_list, dtype=np.float64)
     # If phred is True, perform conversion to phred scores (ASCII - 33)
     if phred:
         concatenated_array = concatenated_array - 33
