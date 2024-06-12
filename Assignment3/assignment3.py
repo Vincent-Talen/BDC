@@ -55,11 +55,12 @@ def parse_args() -> argparse.Namespace:
     # Create group with combine mode arguments
     combine_args = parser.add_argument_group(title="Arguments when ran in combine mode")
     combine_args.add_argument(
-        "--filename",
+        "-o",
         action="store",
+        dest="output_file",
         type=Path,
         required=False,
-        help="The name of the fastq input file."
+        help="CSV file output should be saved to. Default is to write output to STDOUT."
     )
     return parser.parse_args()
 
@@ -104,7 +105,6 @@ def main():
         print("sum:", list(sum_array))
         print("count:", list(position_count_array))
     elif args.combine:
-        print(str(args.filename))
         sum_arrays = []
         count_arrays = []
         with fileinput.input(mode="r") as file:
@@ -120,8 +120,13 @@ def main():
 
         # Calculate the total average phred score per position for the file
         file_phred_averages = np.divide(total_sum, total_counts, dtype=np.float64)
-        for i, pos in enumerate(file_phred_averages):
-            print(f"{i},{pos}")
+
+        # Open the output file if specified, otherwise use sys.stdout
+        out_target = args.output_file.open("w") if args.output_file else sys.stdout
+
+        with out_target as output:
+            for i, pos in enumerate(file_phred_averages):
+                output.write(f"{i},{pos}\n")
 
 
 if __name__ == "__main__":
