@@ -25,11 +25,11 @@ import numpy as np
 
 A1_DIR = str(Path(__file__).parent.parent.joinpath("Assignment1"))
 sys.path.append(A1_DIR)
-from assignment1 import combine_numpy_arrays
+from assignment1 import process_numpy_arrays
 
 
 # FUNCTIONS
-def parse_args() -> argparse.Namespace:
+def parse_cli_args() -> argparse.Namespace:
     """Parses the CLI arguments given to the script.
 
     Returns:
@@ -84,7 +84,7 @@ def quality_line_generator() -> bytes:
 def main():
     """Main function of the script."""
     # Parse arguments
-    args = parse_args()
+    args = parse_cli_args()
     # Empty sys.argv so fileinput.input() will read from STDIN
     sys.argv = sys.argv[0:1]
 
@@ -96,27 +96,27 @@ def main():
             for line in quality_line_generator()
         ]
 
-        # Create a single array containing all the quality lines' phred scores
-        complete_phred_array = combine_numpy_arrays(quality_array_list, phred=True)
-
-        # Calculate the sum and count/weight of each column for the chunk
-        sum_array = np.nansum(complete_phred_array, axis=0)
-        position_count_array = np.count_nonzero(~np.isnan(complete_phred_array), axis=0)
+        # Get the total phred score and the amount of characters per position/column
+        sum_array, count_array = process_numpy_arrays(quality_array_list, phred=True)
         print("sum:", list(sum_array))
-        print("count:", list(position_count_array))
+        print("count:", list(count_array))
     elif args.combine:
         sum_arrays = []
         count_arrays = []
         with fileinput.input(mode="r") as file:
             for line in file:
                 if line.startswith("sum:"):
-                    sum_arrays.append(np.fromstring(line.strip()[6:-1], sep=", "))
+                    sum_arrays.append(
+                        np.fromstring(line.strip()[6:-1], sep=", ", dtype=np.int64)
+                    )
                 elif line.startswith("count:"):
-                    count_arrays.append(np.fromstring(line.strip()[8:-1], sep=", "))
+                    count_arrays.append(
+                        np.fromstring(line.strip()[8:-1], sep=", ", dtype=np.int64)
+                    )
 
-        # Combine the sums and position counts of all the chunks of the file
-        total_sum = np.sum(combine_numpy_arrays(sum_arrays), axis=0)
-        total_counts = np.sum(combine_numpy_arrays(count_arrays), axis=0)
+        # Get the total sum and position counts of the file
+        total_sum, _ = process_numpy_arrays(sum_arrays)
+        total_counts, _ = process_numpy_arrays(count_arrays)
 
         # Calculate the total average phred score per position for the file
         file_phred_averages = np.divide(total_sum, total_counts, dtype=np.float64)

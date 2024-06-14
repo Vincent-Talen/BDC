@@ -47,7 +47,7 @@ AUTHKEY = b"yeahthisissecretdidyoureallythinkiwouldtellyou?"
 
 
 # FUNCTIONS
-def parse_args() -> argparse.Namespace:
+def parse_cli_args() -> argparse.Namespace:
     """Parses the CLI arguments given to the script.
 
     Returns:
@@ -383,7 +383,7 @@ class Client(mp.Process):
 def main():
     """Main function of the script."""
     # Parse arguments
-    args = parse_args()
+    args = parse_cli_args()
 
     # Checks if script is started as server or client mode
     if args.s:

@@ -1,5 +1,9 @@
 #!/bin/bash
 
+########################################
+#   BDC Assignment3 by Vincent Talen   #
+########################################
+
 # Define which hosts the work should be distributed to
 HOSTS="assemblix2019,nuc404,nuc420"
 #HOSTS="assemblix2019,nuc{112..122},nuc{200..208},nuc{401..407},nuc{409..415},nuc{417..427}"
