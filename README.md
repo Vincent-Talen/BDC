@@ -1,7 +1,7 @@
 # Big Data Computing
 **Bio-Informatics Year 3, Period 12 (2023-2024)**
 
-Description of the course.
+Learning about the concepts of Big Data Computing, e.g. parallelization, distributed computing, etc. and how to use them in practice.
 
 
 ---
@@ -26,7 +26,23 @@ Tools used: `argparse`, `multiprocessing.Pool`, `pathlib.Path`, `numpy`
 This assignment is a continuation of assignment1 since it has the same input and output, 
 but computing will now be done on multiple computers using `multiprocessing`s `Process` and `Queue` classes.
 
-Tools used: `argparse`, `multiprocessing.Process`, `multiprocessing.Queue`, `queue.Queue`, `pathlib.Path`
+New tools used: `multiprocessing.Process`, `multiprocessing.Queue`, `queue.Queue`
+
+### Assignment3 - Splitting and distributing FastQ files with GNU Parallel
+To not have to manually start a server and clients on multiple computers, `GNU Parallel` is used to distribute the work over the network.
+It does not only distribute the work, but it also actually splits the files into smaller chunks and because of this the Python script
+now has to read its data directly from `STDIN` using `fileinput`.
+
+New tools used: `fileinput`, `GNU Parallel`
+
+
+### Assignment4 - Using SLURM and OpenMPI to distribute and perform work on a cluster
+On a cluster you may not directly have access to nodes using SSH, so directly distributing it using `GNU Parallel` may not be possible or allowed. 
+Often, the available resources need to be shared with other users, so a job scheduler is used to manage the resources and for this assignment `SLURM` is used. 
+When using `SLURM` we do not directly have access to or knowledge about the nodes performing the work, another way to keep track of what work needs to be done is needed. 
+This is where `OpenMPI` with `mpi4py` comes in, it starts the multiple processes (possibly on different nodes) and handles all the communication between them.
+
+New tools used: `mpi4py`, `OpenMPI`, `SLURM`
 
 
 ---
@@ -40,6 +56,16 @@ BDC
 ├── Assignment2
 │   ├── README.md
 │   ├── assignment2.py
+│   └── example_output.csv
+├── Assignment3
+│   ├── README.md
+│   ├── assignment3.py
+│   ├── assignment3.sh
+│   └── example_output.csv
+├── Assignment4
+│   ├── README.md
+│   ├── assignment4.py
+│   ├── assignment4.sh
 │   └── example_output.csv
 ├── .gitignore
 ├── LICENSE
