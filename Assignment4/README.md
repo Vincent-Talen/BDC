@@ -33,6 +33,9 @@ The main script doing the calculations, created for the assignment.
 #### assignment4.sh
 The SLURM bash script containing the configuration settings and the MPI command that runs the Python script.
 
+#### benchmarking.sh
+For deliverable 2 this (SLURM) bash script was made to run the script using 1, 2, 3 and 4 workers, each 3 times. 
+The timings are saved in a CSV file for comparison and each run saves the output in a separate file, so the instability of floating-point calculations can be tested.
 
 ---
 ## Installation

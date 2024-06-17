@@ -12,7 +12,7 @@ Usage:
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.2"
+__version__ = "0.3"
 
 # IMPORTS
 import argparse
@@ -37,6 +37,14 @@ def parse_cli_args() -> argparse.Namespace:
         description="Script for Assignment 4 of the Big Data Computing course."
     )
     parser.add_argument(
+        "-o",
+        action="store",
+        dest="output_file",
+        type=Path,
+        required=False,
+        help="CSV file output should be saved to. Default is to write output to STDOUT."
+    )
+    parser.add_argument(
         "fastq_files",
         action="store",
         type=Path,
@@ -58,7 +66,11 @@ def main():
 
     if rank == 0:
         # Create file handler and use it to generate chunks
-        file_handler = FastQFileHandler(fastq_files=args.fastq_files, chunk_count=nproc)
+        file_handler = FastQFileHandler(
+            fastq_files=args.fastq_files,
+            output_file=args.output_file,
+            chunk_count=nproc,
+        )
         unprocessed_chunks = list(file_handler.generate_chunks())
     else:
         unprocessed_chunks = None

@@ -5,7 +5,6 @@
 ########################################
 
 #SBATCH --job-name=bdc_a4
-#SBATCH --account=vktalen
 #              d-hh:mm:ss
 #SBATCH --time=0-00:01:00
 #SBATCH --nodes=1
