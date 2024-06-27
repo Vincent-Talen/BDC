@@ -17,7 +17,7 @@ features removed from it.
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.2"
+__version__ = "0.3"
 
 # IMPORTS
 from pathlib import Path
@@ -29,6 +29,7 @@ from pyspark.sql.functions import explode, split
 # GLOBALS
 CODING_KEYS = ["CDS"]
 NON_CODING_KEYS = ["ncRNA", "rRNA"]
+ALL_DESIRED_KEYS = ["gene", *CODING_KEYS, *NON_CODING_KEYS]
 
 
 # FUNCTIONS
@@ -80,6 +81,19 @@ def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
         .withColumn("features", explode(split("features", "//")))
         # Split the information of features into separate columns
         .rdd.map(split_feature_column).toDF()
+    )
+
+
+def filter_features(features_df: DataFrame) -> DataFrame:
+    return (
+        features_df
+        # Only keep the features that are desired
+        .filter(features_df.feature_key.isin(ALL_DESIRED_KEYS))
+        # Remove features whose locations are (partially) unsure
+        .filter(~features_df.feature_location.rlike(r"<\d+\.{2}\d+"))
+        .filter(~features_df.feature_location.rlike(r"\d+\.{2}>\d+"))
+        # Remove features with "join" in their location
+        .filter(~features_df.feature_location.contains("join"))
     )
 
 
@@ -143,6 +157,7 @@ def main():
 
     # Create a DataFrame with all the features in the .gbff file
     features_df: DataFrame = create_features_dataframe(spark, file)
+    features_df = filter_features(features_df)
 
     # Answer the questions about the features
     answer_questions(features_df)
