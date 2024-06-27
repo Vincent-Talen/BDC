@@ -23,8 +23,7 @@ __version__ = "0.3"
 from pathlib import Path
 
 from pyspark.sql import DataFrame, Row, SparkSession
-from pyspark.sql.functions import explode, split
-
+from pyspark.sql.functions import col, explode, split
 
 # GLOBALS
 CODING_KEYS = ["CDS"]
@@ -81,13 +80,11 @@ def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
         .withColumn("features", explode(split("features", "//")))
         # Split the information of features into separate columns
         .rdd.map(split_feature_column).toDF()
-    )
-
-
-def filter_features(features_df: DataFrame) -> DataFrame:
-    return features_df.filter(
-        features_df.feature_key.isin(ALL_DESIRED_KEYS)
-        & features_df.feature_location.rlike(r"^(?:complement\()?\d+\.{2}\d+\)?$")
+        # Filter features by the desired keys and supported location format
+        .filter(
+            col("feature_key").isin(ALL_DESIRED_KEYS)
+            & col("feature_location").rlike(r"^(?:complement\()?\d+\.{2}\d+\)?$")
+        )
     )
 
 
@@ -149,9 +146,8 @@ def main():
     # file = str(data_dir / "archaea" / "archaea.3.genomic.gbff")
     print(f"\nPerforming analysis on the following file:\n  {file}\n")
 
-    # Create a DataFrame with all the features in the .gbff file
+    # Create a DataFrame with a filtered subset of features from the .gbff file
     features_df: DataFrame = create_features_dataframe(spark, file)
-    features_df = filter_features(features_df)
 
     # Answer the questions about the features
     answer_questions(features_df)
