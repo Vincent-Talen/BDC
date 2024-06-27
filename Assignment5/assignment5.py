@@ -17,7 +17,7 @@ features removed from it.
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.1"
+__version__ = "0.2"
 
 # IMPORTS
 from pathlib import Path
@@ -60,7 +60,7 @@ def split_feature_column(row: Row) -> Row:
         identifier=row.identifier,
         organism=row.organism,
         feature_index=int(feature_info[0]),
-        feature_name=feature_info[1],
+        feature_key=feature_info[1],
         feature_location=feature_info[2]
     )
 
@@ -78,24 +78,47 @@ def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
     )
 
 
+def answer_questions(features_df: DataFrame) -> None:
+    # Q1: How many features does an Archaea genome have on average?
+    q1 = features_df.groupBy("identifier").count().agg({"count": "mean"}).collect()[0][0]
+    print(f"Answer 1: An Archaea genome has {q1:.2f} features on average.")
+
+    # Q2: What is the proportion between coding and non-coding features?
+
+    # Q3: What are the min and max amount of proteins of all organisms in the file?
+
+    # Q4: What is the average length of a feature?
+
+
 # MAIN
 def main():
+    """Main function of the script."""
     # Create SparkSession
     spark: SparkSession = (
         SparkSession.builder
         .master("local[16]")
+        .config("spark.executor.memory", "64g")
+        .config("spark.driver.memory", "64g")
+        # .config("spark.log.level", "ERROR")
         .appName("bdc_a5")
         .getOrCreate()
     )
 
     # Specify the directory to the data and which file to use
     data_dir = Path("/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release")
-    # file = str(data_dir / "archaea" / "archaea.1.genomic.gbff")  # Real, large file
-    file = str(data_dir / "archaea" / "archaea.2.rna.gbff")  # Tiny 'test' file
+    file = str(data_dir / "archaea" / "archaea.1.genomic.gbff")
+    # file = str(data_dir / "archaea" / "archaea.2.genomic.gbff")
+    # file = str(data_dir / "archaea" / "archaea.3.genomic.gbff")
+    print(f"\nPerforming analysis on the following file:\n  {file}\n")
 
     # Create a DataFrame with all the features in the .gbff file
     features_df: DataFrame = create_features_dataframe(spark, file)
-    features_df.show()
+
+    # Answer the questions about the features
+    answer_questions(features_df)
+
+    # Save the DataFrame in Spark format with only coding features
+    pass
 
 
 if __name__ == "__main__":
