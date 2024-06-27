@@ -85,15 +85,9 @@ def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
 
 
 def filter_features(features_df: DataFrame) -> DataFrame:
-    return (
-        features_df
-        # Only keep the features that are desired
-        .filter(features_df.feature_key.isin(ALL_DESIRED_KEYS))
-        # Remove features whose locations are (partially) unsure
-        .filter(~features_df.feature_location.rlike(r"<\d+\.{2}\d+"))
-        .filter(~features_df.feature_location.rlike(r"\d+\.{2}>\d+"))
-        # Remove features with "join" in their location
-        .filter(~features_df.feature_location.contains("join"))
+    return features_df.filter(
+        features_df.feature_key.isin(ALL_DESIRED_KEYS)
+        & features_df.feature_location.rlike(r"^(?:complement\()?\d+\.{2}\d+\)?$")
     )
 
 
