@@ -26,6 +26,11 @@ from pyspark.sql import DataFrame, Row, SparkSession
 from pyspark.sql.functions import explode, split
 
 
+# GLOBALS
+CODING_KEYS = ["CDS"]
+NON_CODING_KEYS = ["ncRNA", "rRNA"]
+
+
 # FUNCTIONS
 def extract_record_info(record: Row) -> Row:
     record_str: str = record.value
@@ -78,14 +83,39 @@ def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
     )
 
 
+def question2(features_df: DataFrame) -> float:
+    # Q2: What is the proportion between coding and non-coding features?
+    coding_features = features_df.filter(features_df.feature_key.isin(CODING_KEYS))
+    non_coding_features = features_df.filter(features_df.feature_key.isin(NON_CODING_KEYS))
+    return coding_features.count() / non_coding_features.count()
+
+
+def question3(features_df: DataFrame) -> tuple[int, int]:
+    # Q3: What are the min and max amount of proteins of all organisms in the file?
+    proteins_only = features_df.filter(features_df.feature_key.isin(CODING_KEYS))
+    x = proteins_only.groupBy("identifier").agg({"feature_key": "count"}).select("count(feature_key)").sort("count(feature_key)").collect()
+    return x[0][0], x[-1][0]
+
+
 def answer_questions(features_df: DataFrame) -> None:
     # Q1: How many features does an Archaea genome have on average?
     q1 = features_df.groupBy("identifier").count().agg({"count": "mean"}).collect()[0][0]
     print(f"Answer 1: An Archaea genome has {q1:.2f} features on average.")
 
     # Q2: What is the proportion between coding and non-coding features?
+    q2 = question2(features_df)
+    print(
+        f"Answer 2: "
+        f"The proportion between coding and non-coding features is {q2:.2f} to 1."
+    )
 
     # Q3: What are the min and max amount of proteins of all organisms in the file?
+    q3_min, q3_max = question3(features_df)
+    print(
+        f"Answer 3: "
+        f"The minimum amount of proteins in any organism is {q3_min} and "
+        f"the maximum is {q3_max}."
+    )
 
     # Q4: What is the average length of a feature?
 
