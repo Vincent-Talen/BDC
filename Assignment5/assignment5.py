@@ -70,6 +70,24 @@ def split_feature_column(row: Row) -> Row:
     )
 
 
+def split_location_column(row: Row) -> Row:
+    location_str: str = row.location
+    complement = False
+    if location_str.startswith("complement"):
+        complement = True
+        location_str = location_str[11:-1]
+    start, stop = location_str.split("..")
+    return Row(
+        identifier=row.identifier,
+        organism=row.organism,
+        feature_index=row.feature_index,
+        key=row.key,
+        start=int(start),
+        stop=int(stop),
+        complement=complement,
+    )
+
+
 def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
     return (
         # Load the file as a DataFrame where each record is a row
@@ -85,6 +103,8 @@ def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
             col("key").isin(ALL_DESIRED_KEYS)
             & col("location").rlike(r"^(?:complement\()?\d+\.{2}\d+\)?$")
         )
+        # Split the location column into separate columns
+        .rdd.map(split_location_column).toDF()
     )
 
 
