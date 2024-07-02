@@ -17,7 +17,7 @@ features removed from it.
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.3"
+__version__ = "0.4"
 
 # IMPORTS
 from pathlib import Path
@@ -108,6 +108,20 @@ def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
     )
 
 
+def remove_coding_gene_features(features_df: DataFrame) -> DataFrame:
+    all_genes = features_df.filter(col("key").like("gene")).alias("gene")
+    all_cds = features_df.filter(col("key").like("CDS")).alias("cds")
+
+    join_condition = [
+        col("gene.identifier") == col("cds.identifier"),
+        col("gene.start") <= col("cds.start"),
+        col("gene.stop") >= col("cds.stop"),
+        col("gene.complement") == col("cds.complement"),
+    ]
+    only_non_coding_genes = all_genes.join(all_cds, on=join_condition, how="left_anti")
+    return features_df.filter(~col("key").like("gene")).union(only_non_coding_genes)
+
+
 def question2(features_df: DataFrame) -> float:
     # Q2: What is the proportion between coding and non-coding features?
     coding_features = features_df.filter(features_df.key.isin(CODING_KEYS))
@@ -176,6 +190,7 @@ def main():
 
     # Create a DataFrame with a filtered subset of features from the .gbff file
     features_df: DataFrame = create_features_dataframe(spark, file)
+    features_df = remove_coding_gene_features(features_df)
 
     # Answer the questions about the features
     answer_questions(features_df)
