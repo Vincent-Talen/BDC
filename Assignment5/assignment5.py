@@ -143,9 +143,19 @@ def question3(features_df: DataFrame) -> tuple[int, int]:
     return protein_counts[0][0], protein_counts[-1][0]
 
 
+def question4(features_df: DataFrame) -> float:
+    # Q4: What is the average length of a feature?
+    return (
+        features_df
+        .withColumn("length", col("stop") - col("start"))
+        .agg({"length": "mean"})
+        .first()[0]
+    )
+
+
 def answer_questions(features_df: DataFrame) -> None:
     # Q1: How many features does an Archaea genome have on average?
-    q1 = features_df.groupBy("identifier").count().agg({"count": "mean"}).collect()[0][0]
+    q1 = features_df.groupBy("identifier").count().agg({"count": "mean"}).first()[0]
     print(f"Answer 1: An Archaea genome has {q1:.2f} features on average.")
 
     # Q2: What is the proportion between coding and non-coding features?
@@ -164,6 +174,8 @@ def answer_questions(features_df: DataFrame) -> None:
     )
 
     # Q4: What is the average length of a feature?
+    q4 = question4(features_df)
+    print(f"Answer 4: The average length of a feature is {q4:.2f}.")
 
 
 # MAIN
