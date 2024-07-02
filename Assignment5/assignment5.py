@@ -65,8 +65,8 @@ def split_feature_column(row: Row) -> Row:
         identifier=row.identifier,
         organism=row.organism,
         feature_index=int(feature_info[0]),
-        feature_key=feature_info[1],
-        feature_location=feature_info[2]
+        key=feature_info[1],
+        location=feature_info[2]
     )
 
 
@@ -82,24 +82,31 @@ def create_features_dataframe(spark: SparkSession, file: str) -> DataFrame:
         .rdd.map(split_feature_column).toDF()
         # Filter features by the desired keys and supported location format
         .filter(
-            col("feature_key").isin(ALL_DESIRED_KEYS)
-            & col("feature_location").rlike(r"^(?:complement\()?\d+\.{2}\d+\)?$")
+            col("key").isin(ALL_DESIRED_KEYS)
+            & col("location").rlike(r"^(?:complement\()?\d+\.{2}\d+\)?$")
         )
     )
 
 
 def question2(features_df: DataFrame) -> float:
     # Q2: What is the proportion between coding and non-coding features?
-    coding_features = features_df.filter(features_df.feature_key.isin(CODING_KEYS))
-    non_coding_features = features_df.filter(features_df.feature_key.isin(NON_CODING_KEYS))
+    coding_features = features_df.filter(features_df.key.isin(CODING_KEYS))
+    non_coding_features = features_df.filter(features_df.key.isin(NON_CODING_KEYS))
     return coding_features.count() / non_coding_features.count()
 
 
 def question3(features_df: DataFrame) -> tuple[int, int]:
     # Q3: What are the min and max amount of proteins of all organisms in the file?
-    proteins_only = features_df.filter(features_df.feature_key.isin(CODING_KEYS))
-    x = proteins_only.groupBy("identifier").agg({"feature_key": "count"}).select("count(feature_key)").sort("count(feature_key)").collect()
-    return x[0][0], x[-1][0]
+    protein_counts = (
+        features_df
+        .filter(features_df.key.isin(CODING_KEYS))
+        .groupBy("organism")
+        .agg({"key": "count"})
+        .select("count(key)")
+        .sort("count(key)")
+        .collect()
+    )
+    return protein_counts[0][0], protein_counts[-1][0]
 
 
 def answer_questions(features_df: DataFrame) -> None:
@@ -144,7 +151,8 @@ def main():
     file = str(data_dir / "archaea" / "archaea.1.genomic.gbff")
     # file = str(data_dir / "archaea" / "archaea.2.genomic.gbff")
     # file = str(data_dir / "archaea" / "archaea.3.genomic.gbff")
-    print(f"\nPerforming analysis on the following file:\n  {file}\n")
+    print(f"\nPerforming analysis and answering questions for the following file:")
+    print(f"  {file}\n")
 
     # Create a DataFrame with a filtered subset of features from the .gbff file
     features_df: DataFrame = create_features_dataframe(spark, file)
