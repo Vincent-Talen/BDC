@@ -45,6 +45,15 @@ This is where `OpenMPI` with `mpi4py` comes in, it starts the multiple processes
 New tools used: `mpi4py`, `OpenMPI`, `SLURM`
 
 
+### Assignment5 - Using Apache Spark and pyspark.sql to analyse a GBFF file's contents
+An even better and more used option is `Apache Spark`, which is an engine made for large-scale data processing (big data) based on the MapReduce paradigm. 
+It can distribute work to nodes on a cluster, utilizes in-memory caching and optimizes query execution for fast analytic queries against data of any size. 
+Because we are working in Python we will use `pyspark.sql` which is a Spark module that makes it easier to work with structured data using `DataFrame`s. 
+This assignment will use these tools and its accompanying techniques to analyse the contents of a `GenBank Flat File` (GBFF) by answering some questions about it.
+
+New tools used: `Apache Spark`, `pyspark.sql`
+
+
 ---
 ## Repository file structure
 ```
@@ -67,6 +76,9 @@ BDC
 │   ├── assignment4.py
 │   ├── assignment4.sh
 │   └── example_output.csv
+├── Assignment5
+│   ├── README.md
+│   └── assignment5.py
 ├── .gitignore
 ├── LICENSE
 ├── README.md
