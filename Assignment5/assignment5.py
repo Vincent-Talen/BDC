@@ -321,6 +321,7 @@ def main():
     spark: SparkSession = (
         SparkSession.builder
         .master("local[16]")
+        .config("spark.ui.enabled", False)
         .config("spark.executor.memory", "64g")
         .config("spark.driver.memory", "64g")
         # .config("spark.log.level", "ERROR")
