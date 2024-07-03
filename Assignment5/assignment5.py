@@ -27,8 +27,8 @@ from pyspark.sql.functions import col, explode, split
 
 # GLOBALS
 CODING_KEYS = ["CDS"]
-NON_CODING_KEYS = ["ncRNA", "rRNA"]
-ALL_DESIRED_KEYS = ["gene", *CODING_KEYS, *NON_CODING_KEYS]
+NON_CODING_KEYS = ["ncRNA", "rRNA", "gene"]
+ALL_DESIRED_KEYS = [*CODING_KEYS, *NON_CODING_KEYS]
 
 
 # FUNCTIONS
