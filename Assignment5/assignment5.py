@@ -122,6 +122,17 @@ def remove_coding_gene_features(features_df: DataFrame) -> DataFrame:
     return features_df.filter(~col("key").like("gene")).union(only_non_coding_genes)
 
 
+def question1(features_df: DataFrame) -> float:
+    # Q1: How many features does an Archaea genome have on average?
+    return (
+        features_df
+        .groupBy("identifier")
+        .count()
+        .agg({"count": "mean"})
+        .first()[0]
+    )
+
+
 def question2(features_df: DataFrame) -> float:
     # Q2: What is the proportion between coding and non-coding features?
     coding_features = features_df.filter(features_df.key.isin(CODING_KEYS))
@@ -155,27 +166,27 @@ def question4(features_df: DataFrame) -> float:
 
 def answer_questions(features_df: DataFrame) -> None:
     # Q1: How many features does an Archaea genome have on average?
-    q1 = features_df.groupBy("identifier").count().agg({"count": "mean"}).first()[0]
-    print(f"Answer 1: An Archaea genome has {q1:.2f} features on average.")
+    answer1 = question1(features_df)
+    print(f"Answer 1: An Archaea genome has {answer1:.2f} features on average.")
 
     # Q2: What is the proportion between coding and non-coding features?
-    q2 = question2(features_df)
+    answer2 = question2(features_df)
     print(
         f"Answer 2: "
-        f"The proportion between coding and non-coding features is {q2:.2f} to 1."
+        f"The proportion between coding and non-coding features is {answer2:.2f} to 1."
     )
 
     # Q3: What are the min and max amount of proteins of all organisms in the file?
-    q3_min, q3_max = question3(features_df)
+    answer3_min, answer3_max = question3(features_df)
     print(
         f"Answer 3: "
-        f"The minimum amount of proteins in any organism is {q3_min} and "
-        f"the maximum is {q3_max}."
+        f"The minimum amount of proteins in any organism is {answer3_min} and "
+        f"the maximum is {answer3_max}."
     )
 
     # Q4: What is the average length of a feature?
-    q4 = question4(features_df)
-    print(f"Answer 4: The average length of a feature is {q4:.2f}.")
+    answer4 = question4(features_df)
+    print(f"Answer 4: The average length of a feature is {answer4:.2f}.")
 
 
 # MAIN
