@@ -17,7 +17,7 @@ features removed from it.
 
 # METADATA
 __author__ = "Vincent Talen"
-__version__ = "0.4"
+__version__ = "0.5"
 
 # IMPORTS
 from pathlib import Path
@@ -194,21 +194,22 @@ def main():
 
     # Specify the directory to the data and which file to use
     data_dir = Path("/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release")
-    file = str(data_dir / "archaea" / "archaea.1.genomic.gbff")
-    # file = str(data_dir / "archaea" / "archaea.2.genomic.gbff")
-    # file = str(data_dir / "archaea" / "archaea.3.genomic.gbff")
     print(f"\nPerforming analysis and answering questions for the following file:")
     print(f"  {file}\n")
+    file = data_dir / "archaea" / "archaea.1.genomic.gbff"
+    # file = data_dir / "archaea" / "archaea.2.genomic.gbff"
+    # file = data_dir / "archaea" / "archaea.3.genomic.gbff"
 
     # Create a DataFrame with a filtered subset of features from the .gbff file
-    features_df: DataFrame = create_features_dataframe(spark, file)
+    features_df: DataFrame = create_features_dataframe(spark, str(file))
     features_df = remove_coding_gene_features(features_df)
 
     # Answer the questions about the features
     answer_questions(features_df)
 
     # Save the DataFrame in Spark format with only coding features
-    pass
+    output_file = file.stem + "_coding_features.parquet"
+    features_df.filter(col("key").isin(CODING_KEYS)).write.parquet(output_file)
 
 
 if __name__ == "__main__":
