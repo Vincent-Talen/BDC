@@ -19,7 +19,6 @@ __version__ = "2.5"
 # IMPORTS
 import argparse
 import multiprocessing as mp
-import sys
 
 from operator import itemgetter
 from pathlib import Path
@@ -264,21 +263,21 @@ class FastQFileHandler:
         in a list and if there are any they are all printed and the program exits.
 
         Raises:
-            FileNotFoundError: If no files were given at all.
+            An ExceptionGroup containing one or two different types of exceptions:
+            - FileNotFoundError: If a file does not exist or no files were given at all.
+            - FileEmptyError: If a file is empty.
         """
         if not self.file_paths:
             raise FileNotFoundError("No files were given to process!")
 
-        file_error_strings = []
+        errors = []
         for file_path in self.file_paths:
             if not file_path.exists():
-                file_error_strings.append(f"ERROR: File '{file_path}' does not exist!")
+                errors.append(FileNotFoundError(f"File '{file_path}' does not exist!"))
             if not file_path.stat().st_size > 0:
-                file_error_strings.append(f"ERROR: File '{file_path}' is empty!")
-        if file_error_strings:
-            print("\n".join(file_error_strings))
-            print("Exiting...")
-            sys.exit(1)
+                errors.append(FileEmptyError(f"File '{file_path}' is empty!"))
+        if errors:
+            raise ExceptionGroup("FastQ file errors:", errors)
 
     def _proportionally_divide_chunks_between_files(self) -> dict[Path, int]:
         """Divides the chunks proportionally between the files.
